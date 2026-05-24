@@ -1,0 +1,7 @@
+*.exe
+*.db
+*.xlsx
+*.csv
+*.pkl
+__pycache__/
+Backups/
