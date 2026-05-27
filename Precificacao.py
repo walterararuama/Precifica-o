@@ -50,9 +50,24 @@ tk.Frame(splash, bg=_GOLD, height=5).pack(fill="x", side="top")
 _fm = tk.Frame(splash, bg=_BG)
 _fm.pack(fill="both", expand=True, padx=35, pady=(18, 0))
 
-# Logo / nome
-tk.Label(_fm, text="Bruno Eletromóveis",
-         font=("Segoe UI", 24, "bold"), bg=_BG, fg=_WHITE, anchor="w").pack(fill="x")
+# Linha superior: nome à esquerda, logo voga à direita
+_fm_topo = tk.Frame(_fm, bg=_BG)
+_fm_topo.pack(fill="x")
+tk.Label(_fm_topo, text="Bruno Eletromóveis",
+         font=("Segoe UI", 24, "bold"), bg=_BG, fg=_WHITE, anchor="w").pack(side="left")
+try:
+    _voga_splash_path = (os.path.join(sys._MEIPASS, "voga.png")
+                         if getattr(sys, 'frozen', False)
+                         else os.path.join(diretorio_atual, "voga.png"))
+    _logo_splash = tk.PhotoImage(file=_voga_splash_path)
+    _s = max(1, _logo_splash.height() // 52)
+    if _s > 1:
+        _logo_splash = _logo_splash.subsample(_s, _s)
+    _lbl_logo_splash = tk.Label(_fm_topo, image=_logo_splash, bg=_BG, bd=0)
+    _lbl_logo_splash.image = _logo_splash   # evita garbage collection
+    _lbl_logo_splash.pack(side="right", padx=(10, 0))
+except Exception:
+    pass
 tk.Label(_fm, text="Engenharia de Custos  ·  V4",
          font=("Segoe UI", 10), bg=_BG, fg=_GRAY, anchor="w").pack(fill="x", pady=(2, 0))
 
