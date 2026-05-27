@@ -41,6 +41,13 @@ tk.Label(splash, text="Bruno Eletromóveis", font=("Segoe UI", 14, "bold"), bg="
 tk.Label(splash, text="Carregando Engenharia de Custos...", font=("Segoe UI", 10), bg="#2C3E50", fg="#BDC3C7").pack(pady=(5, 0))
 splash.update()
 
+# Fecha o splash nativo do PyInstaller (aparece durante a extração do onefile)
+try:
+    import pyi_splash
+    pyi_splash.close()
+except ImportError:
+    pass
+
 # --- IMPORTS PESADOS (executados enquanto o splash está visível) ---
 import re
 import pandas as pd

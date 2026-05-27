@@ -1,0 +1,104 @@
+# -*- mode: python ; coding: utf-8 -*-
+# Compilação onefile — apenas o Precificacao.exe precisa ser copiado para os usuários.
+
+a = Analysis(
+    ['Precificacao.py'],
+    pathex=[],
+    binaries=[],
+    datas=[],
+    hiddenimports=[
+        # openpyxl (leitura/escrita de Excel)
+        'openpyxl',
+        'openpyxl.cell',
+        'openpyxl.cell._writer',
+        'openpyxl.styles',
+        'openpyxl.styles.alignment',
+        'openpyxl.styles.borders',
+        'openpyxl.styles.colors',
+        'openpyxl.styles.fills',
+        'openpyxl.styles.fonts',
+        'openpyxl.styles.numbers',
+        'openpyxl.styles.protection',
+        'openpyxl.utils',
+        'openpyxl.utils.dataframe',
+        'openpyxl.workbook',
+        'openpyxl.worksheet',
+        'openpyxl.worksheet.worksheet',
+        'et_xmlfile',
+        # babel (usado pelo pandas internamente)
+        'babel',
+        'babel.numbers',
+        'babel.core',
+        # Pillow (ttkbootstrap pode precisar)
+        'PIL',
+        'PIL.Image',
+        'PIL.ImageTk',
+        'PIL.ImageDraw',
+        'PIL.ImageFont',
+        # ttkbootstrap
+        'ttkbootstrap',
+        'ttkbootstrap.themes',
+        'ttkbootstrap.themes.standard',
+        'ttkbootstrap.localization',
+        'ttkbootstrap.dialogs',
+        'ttkbootstrap.dialogs.dialogs',
+        'ttkbootstrap.widgets',
+        'ttkbootstrap.scrolled',
+        'ttkbootstrap.toast',
+        'ttkbootstrap.tooltip',
+        'ttkbootstrap.validation',
+        # sqlite3 (banco de fornecedores)
+        '_sqlite3',
+    ],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[
+        'matplotlib',
+        'scipy',
+        'IPython',
+        'pytest',
+        'jupyter',
+        'notebook',
+        'tkinter.test',
+    ],
+    noarchive=False,
+    optimize=1,
+)
+
+pyz = PYZ(a.pure)
+
+# Splash nativo do PyInstaller — aparece ANTES do Python iniciar (cobre a extração)
+splash = Splash(
+    'splash.png',
+    binaries=a.binaries,
+    datas=a.datas,
+    text_pos=None,       # sem texto sobreposto na imagem
+    text_size=12,
+    minify_script=True,
+    always_on_top=True,
+)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.datas,
+    splash,
+    splash.binaries,
+    [],
+    name='Precificacao',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+    icon=None,
+)
