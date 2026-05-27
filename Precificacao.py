@@ -510,7 +510,7 @@ def criar_tela():
 
         if _logo_rgba and lbl_logo:
             try:
-                hex_bg = style.colors.primary
+                hex_bg = style.colors.bg
                 if not hex_bg.startswith("#"):
                     hex_bg = "#" + hex_bg
                 _img = _criar_logo_img(_logo_rgba, hex_bg)
@@ -522,18 +522,6 @@ def criar_tela():
     tk.Button(f_header, text="✖ Sair", bg="#FF0000", activebackground="#CC0000", activeforeground="white", fg="white", font=("Segoe UI", 10, "bold"), relief=tk.FLAT, cursor="hand2", padx=15, pady=5, command=sair_seguro).pack(side="right")
     btn_tema = tk.Button(f_header, text="🌙 Modo Noite", bg="#2c3e50", fg="white", font=("Segoe UI", 9, "bold"), relief=tk.FLAT, cursor="hand2", padx=10, command=alternar_tema)
     btn_tema.pack(side="right", padx=10)
-
-    if _logo_rgba:
-        try:
-            hex_bg = style.colors.primary
-            if not hex_bg.startswith("#"):
-                hex_bg = "#" + hex_bg
-            _img_logo = _criar_logo_img(_logo_rgba, hex_bg)
-            lbl_logo = tk.Label(f_header, image=_img_logo, bg=hex_bg, bd=0)
-            lbl_logo.image = _img_logo
-            lbl_logo.pack(side="right", padx=(0, 12))
-        except Exception:
-            pass
 
     # ÁREA DE NOTA — layout adaptativo à resolução
     f_dados_nota = ttkb.Frame(root, padding=(8, 4))
@@ -1797,9 +1785,21 @@ def criar_tela():
 
     f_resumo_container = ttkb.Labelframe(root, text=" 📊 DEMONSTRATIVO FINANCEIRO DA CARGA ", bootstyle="primary", padding=5)
     f_resumo_container.pack(fill="x", side="bottom", padx=10, pady=5)
-    
+
+    if _logo_rgba:
+        try:
+            hex_bg = style.colors.bg
+            if not hex_bg.startswith("#"):
+                hex_bg = "#" + hex_bg
+            _img_logo_footer = _criar_logo_img(_logo_rgba, hex_bg)
+            lbl_logo = tk.Label(f_resumo_container, image=_img_logo_footer, bg=hex_bg, bd=0)
+            lbl_logo.image = _img_logo_footer
+            lbl_logo.pack(side="right", padx=(0, 18), pady=2)
+        except Exception:
+            pass
+
     lbl_res_formula = ttkb.Label(f_resumo_container, text="Aguardando inserção de produtos...", font=("Segoe UI", 13, "bold"), bootstyle="danger")
-    lbl_res_formula.pack(expand=True, pady=2)
+    lbl_res_formula.pack(side="left", expand=True, pady=2)
 
     # =========================================================
     # BARRA DE AÇÕES E ALERTAS (NOVO LAYOUT)
