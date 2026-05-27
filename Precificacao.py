@@ -136,13 +136,6 @@ def _splash_set(pct, msg):
 
 _splash_set(3, "Iniciando...")
 
-# Fecha o splash nativo do PyInstaller (cobre a extração do onefile)
-try:
-    import pyi_splash
-    pyi_splash.close()
-except ImportError:
-    pass
-
 # --- IMPORTS PESADOS — progresso real a cada etapa ---
 _splash_set(8,  "Carregando pandas e módulos base...")
 import re

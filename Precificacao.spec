@@ -68,24 +68,11 @@ a = Analysis(
 
 pyz = PYZ(a.pure)
 
-# Splash nativo do PyInstaller — aparece ANTES do Python iniciar (cobre a extração)
-splash = Splash(
-    'splash.png',
-    binaries=a.binaries,
-    datas=a.datas,
-    text_pos=None,       # sem texto sobreposto na imagem
-    text_size=12,
-    minify_script=True,
-    always_on_top=True,
-)
-
 exe = EXE(
     pyz,
     a.scripts,
     a.binaries,
     a.datas,
-    splash,
-    splash.binaries,
     [],
     name='Precificacao',
     debug=False,
