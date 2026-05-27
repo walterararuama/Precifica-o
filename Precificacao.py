@@ -523,6 +523,8 @@ def criar_tela():
             except Exception:
                 pass
 
+        _inicializar_marca_dagua()
+
     tk.Button(f_header, text="✖ Sair", bg="#FF0000", activebackground="#CC0000", activeforeground="white", fg="white", font=("Segoe UI", 10, "bold"), relief=tk.FLAT, cursor="hand2", padx=15, pady=5, command=sair_seguro).pack(side="right")
     btn_tema = tk.Button(f_header, text="🌙 Modo Noite", bg="#2c3e50", fg="white", font=("Segoe UI", 9, "bold"), relief=tk.FLAT, cursor="hand2", padx=10, command=alternar_tema)
     btn_tema.pack(side="right", padx=10)
@@ -715,6 +717,45 @@ def criar_tela():
     f_grid = tk.Frame(canvas, bg="#7F8C8D"); f_grid.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all"))); canvas.create_window((0, 0), window=f_grid, anchor="nw")
     canvas.configure(yscrollcommand=scrollbar_y.set, xscrollcommand=scrollbar_x.set); scrollbar_y.pack(side="right", fill="y"); scrollbar_x.pack(side="bottom", fill="x"); canvas.pack(side="left", fill="both", expand=True)
 
+    _marca_dagua_img = None
+    _marca_dagua_id  = None
+
+    def _inicializar_marca_dagua():
+        nonlocal _marca_dagua_img, _marca_dagua_id
+        try:
+            img = Image.open(_get_recurso("Bruno.png")).convert("RGBA")
+            max_w = 420
+            if img.width > max_w:
+                img = img.resize((max_w, int(img.height * max_w / img.width)), Image.LANCZOS)
+            bg_cor = "#21252e" if root.tema_atual == 'escuro' else "#ffffff"
+            rr, gg, bb = int(bg_cor[1:3], 16), int(bg_cor[3:5], 16), int(bg_cor[5:7], 16)
+            bg = Image.new("RGBA", img.size, (rr, gg, bb, 255))
+            r_ch, g_ch, b_ch, a_ch = img.split()
+            a_faded = a_ch.point(lambda x: int(x * 0.12))
+            faded = Image.merge("RGBA", (r_ch, g_ch, b_ch, a_faded))
+            bg.paste(faded, mask=faded.split()[3])
+            _marca_dagua_img = ImageTk.PhotoImage(bg.convert("RGB"))
+            cw = max(canvas.winfo_width(), 800)
+            if _marca_dagua_id is None:
+                _marca_dagua_id = canvas.create_image(cw // 2, 360, image=_marca_dagua_img, anchor="center", tags="watermark")
+                canvas.tag_lower("watermark")
+            else:
+                canvas.itemconfig(_marca_dagua_id, image=_marca_dagua_img)
+                canvas.coords(_marca_dagua_id, cw // 2, 360)
+        except Exception:
+            pass
+
+    def _reposicionar_marca_dagua(event=None):
+        if _marca_dagua_id:
+            try:
+                cw = canvas.winfo_width()
+                coords = canvas.coords(_marca_dagua_id)
+                canvas.coords(_marca_dagua_id, cw // 2, coords[1])
+            except Exception:
+                pass
+
+    canvas.bind("<Configure>", _reposicionar_marca_dagua, add="+")
+
     labels_cabecalho_romaneio = []
     lbl_grupo_rom = None
     lbl_sub_qtd_rom = None
@@ -738,6 +779,7 @@ def criar_tela():
                 if "R$"  in texto: lbl_sub_val_rom = lbl
 
     criar_cabecalhos()
+    root.after(300, _inicializar_marca_dagua)
 
     def criar_celula_digitavel(parent, row, col, var, width, justify, font, bg_color, fg_color="black"):
         campo = tk.Entry(parent, textvariable=var, width=width, justify=justify, font=font, bg=bg_color, fg=fg_color, relief="flat", insertbackground=fg_color)

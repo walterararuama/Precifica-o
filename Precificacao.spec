@@ -5,7 +5,7 @@ a = Analysis(
     ['Precificacao.py'],
     pathex=[],
     binaries=[],
-    datas=[('voga.png', '.'), ('icone.ico', '.')],
+    datas=[('voga.png', '.'), ('icone.ico', '.'), ('Bruno.png', '.')],
     hiddenimports=[
         # openpyxl (leitura/escrita de Excel)
         'openpyxl',
