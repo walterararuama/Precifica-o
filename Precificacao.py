@@ -19,46 +19,49 @@ else:
 
 _CONFIG_INI_NOVO = False
 
-def _ler_db_path():
+def _ler_pasta_base():
+    """Le a pasta base de trabalho do config.ini.
+    Tudo fica dentro dela: fornecedores.db, ARQUIVO, FRETES.
+    O config.ini fica local (pasta do .exe) em cada maquina."""
     global _CONFIG_INI_NOVO
     _cfg = configparser.ConfigParser()
     _ini = os.path.join(diretorio_atual, "config.ini")
     if os.path.exists(_ini):
         _cfg.read(_ini, encoding='utf-8')
-        return _cfg.get("banco", "caminho", fallback=os.path.join(diretorio_atual, "fornecedores.db"))
+        # suporta chave nova 'pasta' e chave antiga 'caminho' (compatibilidade)
+        pasta = _cfg.get("banco", "pasta", fallback=None)
+        if not pasta:
+            caminho_antigo = _cfg.get("banco", "caminho", fallback=None)
+            pasta = os.path.dirname(caminho_antigo) if caminho_antigo else diretorio_atual
+        return pasta
     else:
         _CONFIG_INI_NOVO = True
-        _default = os.path.join(diretorio_atual, "fornecedores.db")
-        _cfg["banco"] = {"caminho": _default}
+        _cfg["banco"] = {"pasta": diretorio_atual}
         try:
             with open(_ini, "w", encoding="utf-8") as _f:
                 _cfg.write(_f)
         except Exception:
             pass
-        return _default
+        return diretorio_atual
 
-DB_PATH = _ler_db_path()
+def _aplicar_pasta_base(pasta):
+    """Define DB_PATH, pasta_arquivo e pasta_fretes a partir da pasta base."""
+    global DB_PATH, pasta_arquivo, pasta_fretes
+    DB_PATH = os.path.join(pasta, "fornecedores.db")
+    for _p, _attr in [(os.path.join(pasta, "ARQUIVO"), "pasta_arquivo"),
+                      (os.path.join(pasta, "FRETES"),  "pasta_fretes")]:
+        try:
+            os.makedirs(_p, exist_ok=True)
+            globals()[_attr] = _p
+        except Exception:
+            _local = os.path.join(diretorio_atual, os.path.basename(_p))
+            os.makedirs(_local, exist_ok=True)
+            globals()[_attr] = _local
 
-# --- CRIAÇÃO DAS PASTAS (relativas ao diretório do banco de dados) ---
-def _criar_pastas(db_path):
-    global pasta_arquivo, pasta_fretes
-    _db_dir = os.path.dirname(db_path) or diretorio_atual
-    try:
-        pasta_arquivo = os.path.join(_db_dir, "ARQUIVO")
-        os.makedirs(pasta_arquivo, exist_ok=True)
-    except Exception:
-        pasta_arquivo = os.path.join(diretorio_atual, "ARQUIVO")
-        os.makedirs(pasta_arquivo, exist_ok=True)
-    try:
-        pasta_fretes = os.path.join(_db_dir, "FRETES")
-        os.makedirs(pasta_fretes, exist_ok=True)
-    except Exception:
-        pasta_fretes = os.path.join(diretorio_atual, "FRETES")
-        os.makedirs(pasta_fretes, exist_ok=True)
-
+DB_PATH       = ""
 pasta_arquivo = ""
 pasta_fretes  = ""
-_criar_pastas(DB_PATH)
+_aplicar_pasta_base(_ler_pasta_base())
 
 # =====================================================================
 # SPLASH SCREEN — aparece antes dos imports pesados
@@ -399,89 +402,107 @@ def criar_tela():
     atualizar_estilos()
 
     def abrir_config_banco(primeiro_acesso=False):
-        global DB_PATH
         janela_cfg = tk.Toplevel(root)
-        janela_cfg.title("Configurações — Banco de Dados")
+        janela_cfg.title("Configurações — Pasta de Trabalho em Rede")
         janela_cfg.resizable(False, False)
         janela_cfg.transient(root)
         janela_cfg.grab_set()
         janela_cfg.update_idletasks()
-        larg, alt = 620, 230
-        x = root.winfo_x() + (root.winfo_width() // 2) - larg // 2
-        y = root.winfo_y() + (root.winfo_height() // 2) - alt // 2
+        larg, alt = 660, 280
+        x = root.winfo_x() + (root.winfo_width()  // 2) - larg // 2
+        y = root.winfo_y() + (root.winfo_height() // 2) - alt  // 2
         janela_cfg.geometry(f"{larg}x{alt}+{x}+{y}")
 
         if primeiro_acesso:
             ttkb.Label(janela_cfg,
-                text="Primeiro acesso: o arquivo config.ini foi criado com o caminho padrão.\n"
-                     "Se este computador usa banco compartilhado em rede, configure o caminho abaixo.",
-                font=("Segoe UI", 9), bootstyle="warning", padding=8).pack(fill="x", padx=10, pady=(8,0))
+                text="  Primeiro acesso — informe a pasta de rede onde estão os dados da empresa.\n"
+                     "  O programa irá ler e salvar tudo nessa pasta (banco, planilhas, fretes).",
+                font=("Segoe UI", 9), bootstyle="warning", padding=6).pack(fill="x", padx=10, pady=(8, 0))
 
-        f_cfg = ttkb.Labelframe(janela_cfg, text=" Caminho do Banco de Dados (fornecedores.db) ", padding=12)
+        f_cfg = ttkb.Labelframe(janela_cfg, text=" Pasta de trabalho (banco + planilhas + fretes) ", padding=12)
         f_cfg.pack(fill="both", expand=True, padx=10, pady=8)
 
-        var_cam = tk.StringVar(value=DB_PATH)
-        ent_cam = ttkb.Entry(f_cfg, textvariable=var_cam, font=("Segoe UI", 10), width=58)
-        ent_cam.grid(row=0, column=0, padx=(0, 5), pady=6, sticky="ew")
+        # pasta atual = diretório do DB_PATH
+        _pasta_atual = os.path.dirname(DB_PATH) if DB_PATH else diretorio_atual
+        var_pasta = tk.StringVar(value=_pasta_atual)
+
+        ttkb.Entry(f_cfg, textvariable=var_pasta, font=("Segoe UI", 10), width=62).grid(
+            row=0, column=0, padx=(0, 5), pady=6, sticky="ew")
 
         def _browse():
             import tkinter.filedialog as _fd
-            p = _fd.askopenfilename(
-                title="Selecionar banco de dados existente",
-                filetypes=[("SQLite Database", "*.db"), ("Todos os arquivos", "*.*")],
-                parent=janela_cfg
-            )
+            p = _fd.askdirectory(title="Selecionar pasta de trabalho", parent=janela_cfg)
             if p:
-                var_cam.set(p)
+                var_pasta.set(os.path.normpath(p))
 
         ttkb.Button(f_cfg, text="📂", command=_browse, bootstyle="secondary", width=3).grid(row=0, column=1)
 
-        lbl_status = ttkb.Label(f_cfg, text="", font=("Segoe UI", 9))
-        lbl_status.grid(row=1, column=0, columnspan=2, sticky="w", pady=(0, 4))
+        lbl_info = ttkb.Label(f_cfg,
+            text=f"  Banco:    {os.path.join(_pasta_atual, 'fornecedores.db')}\n"
+                 f"  Arquivos: {os.path.join(_pasta_atual, 'ARQUIVO')}\n"
+                 f"  Fretes:   {os.path.join(_pasta_atual, 'FRETES')}",
+            font=("Segoe UI", 8), foreground="#555")
+        lbl_info.grid(row=1, column=0, columnspan=2, sticky="w", pady=(0, 2))
+
+        lbl_status = ttkb.Label(f_cfg, text="", font=("Segoe UI", 9, "bold"))
+        lbl_status.grid(row=2, column=0, columnspan=2, sticky="w", pady=(0, 4))
+
+        def _atualizar_info(*_):
+            p = var_pasta.get().strip()
+            lbl_info.config(
+                text=f"  Banco:    {os.path.join(p, 'fornecedores.db')}\n"
+                     f"  Arquivos: {os.path.join(p, 'ARQUIVO')}\n"
+                     f"  Fretes:   {os.path.join(p, 'FRETES')}")
+        var_pasta.trace_add("write", _atualizar_info)
 
         def _testar():
-            try:
-                c = _sqlite3_cfg.connect(var_cam.get().strip(), timeout=10)
-                c.close()
-                lbl_status.config(text="✅ Conexão bem-sucedida!", foreground="#27ae60")
-            except Exception as e:
-                lbl_status.config(text=f"❌ Falha: {e}", foreground="#e74c3c")
-
-        def _salvar():
-            global DB_PATH
-            caminho = var_cam.get().strip()
-            if not caminho:
-                messagebox.showerror("Erro", "Informe um caminho válido.", parent=janela_cfg)
+            pasta = var_pasta.get().strip()
+            if not os.path.isdir(pasta):
+                lbl_status.config(text="❌ Pasta não encontrada ou inacessível.", foreground="#e74c3c")
                 return
             try:
-                c = _sqlite3_cfg.connect(caminho, timeout=10)
+                _db = os.path.join(pasta, "fornecedores.db")
+                c = _sqlite3_cfg.connect(_db, timeout=10)
                 c.close()
+                lbl_status.config(text="✅ Pasta acessível e banco OK!", foreground="#27ae60")
             except Exception as e:
+                lbl_status.config(text=f"❌ Falha no banco: {e}", foreground="#e74c3c")
+
+        def _salvar():
+            pasta = var_pasta.get().strip()
+            if not pasta:
+                messagebox.showerror("Erro", "Informe uma pasta válida.", parent=janela_cfg)
+                return
+            if not os.path.isdir(pasta):
                 if not messagebox.askyesno(
-                    "Aviso",
-                    f"Não foi possível conectar ao banco neste caminho:\n{e}\n\nSalvar mesmo assim?",
+                    "Pasta não encontrada",
+                    f"A pasta não está acessível no momento:\n{pasta}\n\nSalvar mesmo assim?",
                     parent=janela_cfg
                 ):
                     return
             _cfg_w = configparser.ConfigParser()
-            _cfg_w["banco"] = {"caminho": caminho}
-            _ini_path = os.path.join(diretorio_atual, "config.ini")
-            with open(_ini_path, "w", encoding="utf-8") as _fini:
+            _cfg_w["banco"] = {"pasta": pasta}
+            with open(os.path.join(diretorio_atual, "config.ini"), "w", encoding="utf-8") as _fini:
                 _cfg_w.write(_fini)
-            DB_PATH = caminho
-            _criar_pastas(DB_PATH)
+            _aplicar_pasta_base(pasta)
             try:
                 inicializar_banco_fornecedores(DB_PATH, diretorio_atual)
                 root.atualizar_cache_fornecedores()
             except Exception:
                 pass
-            messagebox.showinfo("Salvo", f"Caminho salvo:\n{caminho}\n\nPastas de trabalho:\n{pasta_arquivo}\n{pasta_fretes}", parent=janela_cfg)
+            messagebox.showinfo(
+                "Configuração Salva",
+                f"Pasta de trabalho:\n  {pasta}\n\n"
+                f"Banco:    fornecedores.db\n"
+                f"Arquivos: ARQUIVO\\\n"
+                f"Fretes:   FRETES\\",
+                parent=janela_cfg)
             janela_cfg.destroy()
 
         f_btns = ttkb.Frame(f_cfg)
-        f_btns.grid(row=2, column=0, columnspan=2, pady=6)
-        ttkb.Button(f_btns, text="🔌 Testar Conexão", command=_testar, bootstyle="info").pack(side="left", padx=5)
-        ttkb.Button(f_btns, text="💾 Salvar", command=_salvar, bootstyle="success").pack(side="left", padx=5)
+        f_btns.grid(row=3, column=0, columnspan=2, pady=6)
+        ttkb.Button(f_btns, text="🔌 Testar Acesso", command=_testar, bootstyle="info").pack(side="left", padx=5)
+        ttkb.Button(f_btns, text="💾 Salvar",         command=_salvar, bootstyle="success").pack(side="left", padx=5)
         ttkb.Button(f_btns, text="Cancelar", command=janela_cfg.destroy, bootstyle="secondary").pack(side="left", padx=5)
 
         f_cfg.grid_columnconfigure(0, weight=1)
