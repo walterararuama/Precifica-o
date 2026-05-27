@@ -50,26 +50,31 @@ tk.Frame(splash, bg=_GOLD, height=5).pack(fill="x", side="top")
 _fm = tk.Frame(splash, bg=_BG)
 _fm.pack(fill="both", expand=True, padx=35, pady=(18, 0))
 
-# Linha superior: nome à esquerda, logo voga à direita
-_fm_topo = tk.Frame(_fm, bg=_BG)
-_fm_topo.pack(fill="x")
-tk.Label(_fm_topo, text="Bruno Eletromóveis",
-         font=("Segoe UI", 24, "bold"), bg=_BG, fg=_WHITE, anchor="w").pack(side="left")
+# Nome da empresa
+tk.Label(_fm, text="Bruno Eletromóveis",
+         font=("Segoe UI", 24, "bold"), bg=_BG, fg=_WHITE, anchor="w").pack(fill="x")
+tk.Label(_fm, text="Engenharia de Custos  ·  V4",
+         font=("Segoe UI", 10), bg=_BG, fg=_GRAY, anchor="w").pack(fill="x", pady=(2, 0))
+
+# Logo voga no canto inferior direito do splash
 try:
+    from PIL import Image as _PilImg, ImageTk as _PilTk
     _voga_splash_path = (os.path.join(sys._MEIPASS, "voga.png")
                          if getattr(sys, 'frozen', False)
                          else os.path.join(diretorio_atual, "voga.png"))
-    _logo_splash = tk.PhotoImage(file=_voga_splash_path)
-    _s = max(1, _logo_splash.height() // 52)
-    if _s > 1:
-        _logo_splash = _logo_splash.subsample(_s, _s)
-    _lbl_logo_splash = tk.Label(_fm_topo, image=_logo_splash, bg=_BG, bd=0)
-    _lbl_logo_splash.image = _logo_splash   # evita garbage collection
-    _lbl_logo_splash.pack(side="right", padx=(10, 0))
+    _voga_img = _PilImg.open(_voga_splash_path).convert("RGBA")
+    _target_w = 160
+    _voga_img = _voga_img.resize(
+        (_target_w, int(_voga_img.height * _target_w / _voga_img.width)),
+        _PilImg.LANCZOS)
+    _bg_s = _PilImg.new("RGBA", _voga_img.size, (28, 40, 51, 255))  # #1C2833
+    _bg_s.paste(_voga_img, mask=_voga_img.split()[3])
+    _logo_splash_photo = _PilTk.PhotoImage(_bg_s.convert("RGB"))
+    _lbl_voga_s = tk.Label(splash, image=_logo_splash_photo, bg=_BG, bd=0)
+    _lbl_voga_s.image = _logo_splash_photo
+    _lbl_voga_s.place(relx=1.0, rely=1.0, anchor="se", x=-14, y=-34)
 except Exception:
     pass
-tk.Label(_fm, text="Engenharia de Custos  ·  V4",
-         font=("Segoe UI", 10), bg=_BG, fg=_GRAY, anchor="w").pack(fill="x", pady=(2, 0))
 
 # Linha separadora dourada
 tk.Frame(_fm, bg=_GOLD, height=2).pack(fill="x", pady=(14, 18))
