@@ -27,51 +27,143 @@ DB_PATH = os.path.join(diretorio_atual, "fornecedores.db")
 # =====================================================================
 # SPLASH SCREEN — aparece antes dos imports pesados
 # =====================================================================
+_BG       = "#1C2833"   # fundo escuro
+_GOLD     = "#F1C40F"   # dourado
+_TRACK    = "#2C3E50"   # trilho da barra
+_WHITE    = "#FFFFFF"
+_GRAY     = "#7F8C8D"
+_LGRAY    = "#BDC3C7"
+
 splash = tk.Tk()
 splash.overrideredirect(True)
 splash.attributes("-topmost", True)
-splash_w, splash_h = 400, 200
-splash_x = (splash.winfo_screenwidth() // 2) - (splash_w // 2)
-splash_y = (splash.winfo_screenheight() // 2) - (splash_h // 2)
-splash.geometry(f"{splash_w}x{splash_h}+{splash_x}+{splash_y}")
-splash.configure(bg="#2C3E50")
+_SW, _SH = 540, 300
+_SX = (splash.winfo_screenwidth()  // 2) - (_SW // 2)
+_SY = (splash.winfo_screenheight() // 2) - (_SH // 2)
+splash.geometry(f"{_SW}x{_SH}+{_SX}+{_SY}")
+splash.configure(bg=_BG)
 
-tk.Label(splash, text="⏳", font=("Segoe UI", 48), bg="#2C3E50", fg="#F1C40F").pack(pady=(20, 10))
-tk.Label(splash, text="Bruno Eletromóveis", font=("Segoe UI", 14, "bold"), bg="#2C3E50", fg="white").pack()
-tk.Label(splash, text="Carregando Engenharia de Custos...", font=("Segoe UI", 10), bg="#2C3E50", fg="#BDC3C7").pack(pady=(5, 0))
+# Faixa dourada no topo
+tk.Frame(splash, bg=_GOLD, height=5).pack(fill="x", side="top")
+
+# Área central
+_fm = tk.Frame(splash, bg=_BG)
+_fm.pack(fill="both", expand=True, padx=35, pady=(18, 0))
+
+# Logo / nome
+tk.Label(_fm, text="Bruno Eletromóveis",
+         font=("Segoe UI", 24, "bold"), bg=_BG, fg=_WHITE, anchor="w").pack(fill="x")
+tk.Label(_fm, text="Engenharia de Custos  ·  V4",
+         font=("Segoe UI", 10), bg=_BG, fg=_GRAY, anchor="w").pack(fill="x", pady=(2, 0))
+
+# Linha separadora dourada
+tk.Frame(_fm, bg=_GOLD, height=2).pack(fill="x", pady=(14, 18))
+
+# --- Barra de progresso em Canvas ---
+_BAR_H   = 22
+_RADIUS  = 11   # metade da altura → cápsulas arredondadas
+_cv = tk.Canvas(_fm, height=_BAR_H, bg=_BG, highlightthickness=0)
+_cv.pack(fill="x")
+
+def _draw_pill(canvas, x0, y0, x1, y1, color):
+    """Desenha um retângulo com pontas arredondadas (cápsula)."""
+    r = (y1 - y0) // 2
+    canvas.create_oval(x0, y0, x0 + 2*r, y1, fill=color, outline="")
+    canvas.create_oval(x1 - 2*r, y0, x1, y1, fill=color, outline="")
+    canvas.create_rectangle(x0 + r, y0, x1 - r, y1, fill=color, outline="")
+
+# Trilho (fundo da barra)
+_draw_pill(_cv, 0, 0, _SW - 70, _BAR_H, _TRACK)
+
+# Barra de preenchimento (começa zerada — tags permitem redesenho)
+_bar_tag  = "bar_fill"
+_shine_tag = "bar_shine"
+
+# Porcentagem à direita da barra
+_lbl_pct = tk.Label(_fm, text="0%", font=("Segoe UI", 10, "bold"),
+                    bg=_BG, fg=_GOLD, width=5, anchor="e")
+_lbl_pct.place(relx=1.0, y=-_BAR_H - 2, anchor="ne")   # posicionado à direita
+
+# Label de status
+_lbl_status = tk.Label(_fm, text="Iniciando...",
+                        font=("Segoe UI", 9), bg=_BG, fg=_LGRAY, anchor="w")
+_lbl_status.pack(fill="x", pady=(10, 0))
+
+# Rodapé
+tk.Frame(splash, bg=_GOLD, height=2).pack(fill="x", side="bottom")
+tk.Label(splash, text="© Bruno Eletromóveis  —  Sistema de Precificação",
+         font=("Segoe UI", 7), bg=_BG, fg=_GRAY).pack(side="bottom", pady=(4, 4))
+
 splash.update()
 
-# Fecha o splash nativo do PyInstaller (aparece durante a extração do onefile)
+def _splash_set(pct, msg):
+    """Atualiza barra de progresso e texto de status."""
+    _cv.delete("all")
+    w_total = _cv.winfo_width() or (_SW - 70)
+    w_fill  = max(int(w_total * pct / 100), 0)
+
+    _draw_pill(_cv, 0, 0, w_total, _BAR_H, _TRACK)          # trilho
+    if w_fill > _RADIUS * 2:
+        _draw_pill(_cv, 0, 0, w_fill, _BAR_H, _GOLD)         # preenchimento
+        # Brilho sutil (linha clara no topo da barra)
+        _cv.create_line(
+            _RADIUS, 3, w_fill - _RADIUS, 3,
+            fill="#FDE880", width=2
+        )
+    _lbl_pct.config(text=f"{pct}%")
+    _lbl_status.config(text=f"  ▶  {msg}")
+    splash.update()
+
+_splash_set(3, "Iniciando...")
+
+# Fecha o splash nativo do PyInstaller (cobre a extração do onefile)
 try:
     import pyi_splash
     pyi_splash.close()
 except ImportError:
     pass
 
-# --- IMPORTS PESADOS (executados enquanto o splash está visível) ---
+# --- IMPORTS PESADOS — progresso real a cada etapa ---
+_splash_set(8,  "Carregando pandas e módulos base...")
 import re
 import pandas as pd
+
+_splash_set(30, "Inicializando interface gráfica...")
 from tkinter import ttk, messagebox, filedialog
 import glob
+
+_splash_set(42, "Carregando temas visuais (ttkbootstrap)...")
 import ttkbootstrap as ttkb
 from ttkbootstrap.constants import *
 
+_splash_set(55, "Carregando componentes de tooltip...")
 try:
     from ttkbootstrap.widgets import ToolTip
 except ImportError:
     from ttkbootstrap.tooltip import ToolTip
 
+_splash_set(62, "Carregando utilitários do sistema...")
 from datetime import datetime
 import time
 import logging
 import shutil
 
+_splash_set(68, "Carregando módulo de fretes...")
 from edicao_de_fretes import abrir_modulo_fretes
+
+_splash_set(75, "Carregando módulo de exportação...")
 from exportacao import processar_exportacao_carga, salvar_edicao_precos
+
+_splash_set(82, "Carregando banco de fornecedores...")
 from db_fornecedores import inicializar_banco_fornecedores, carregar_fornecedores_db, get_lista_nomes_fornecedores, abrir_gerenciador_fornecedores
+
+_splash_set(88, "Carregando utilitários de cálculo...")
 from utils import converter_moeda, formatar_moeda, formatar_percentual, auto_selecionar, arredondar_preco, check_nota_duplicada
+
+_splash_set(93, "Carregando motor FDC...")
 from motor_fdc import cache_fdc, carregar_dados_memoria
 
+_splash_set(96, "Configurando logs do sistema...")
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
@@ -82,10 +174,14 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# --- INICIALIZAÇÃO DO BANCO (enquanto splash ainda está visível) ---
+_splash_set(98, "Inicializando banco de fornecedores...")
 inicializar_banco_fornecedores(DB_PATH, diretorio_atual)
+
+_splash_set(100, "Concluído! Abrindo o sistema...")
 cache_fornecedores = carregar_fornecedores_db(DB_PATH)
-splash.destroy()
+
+splash.after(450, splash.destroy)
+splash.mainloop()
 
 # =====================================================================
 # --- TELA PRINCIPAL ---
