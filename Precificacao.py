@@ -272,7 +272,11 @@ def criar_tela():
 
     def check_and_trap(condicao, widget, mensagem):
         if getattr(root, 'ignorando_validacao', False): return False
-        if root.focus_get() is None: return False
+        focus = root.focus_get()
+        if focus is None: return False
+        try:
+            if str(focus.winfo_toplevel()) != str(root): return False
+        except Exception: return False
         if condicao:
             mostrar_balao_aviso(widget, mensagem)
             root.after(10, widget.focus_force)
