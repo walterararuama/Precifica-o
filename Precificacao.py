@@ -1,41 +1,8 @@
-import re
+# Apenas os módulos leves necessários para exibir o splash imediatamente
 import sys
-import pandas as pd
 import os
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
-import glob
-import ttkbootstrap as ttkb
-from ttkbootstrap.constants import *
-
-try:
-    from ttkbootstrap.widgets import ToolTip
-except ImportError:
-    from ttkbootstrap.tooltip import ToolTip
-
 import ctypes
-from datetime import datetime
-import time
-import re
-import logging
-import shutil
-
-# --- IMPORTAÇÃO DOS MÓDULOS EXTERNOS (NOSSO NOVO ECOSSISTEMA) ---
-from edicao_de_fretes import abrir_modulo_fretes
-from exportacao import processar_exportacao_carga, salvar_edicao_precos
-from db_fornecedores import inicializar_banco_fornecedores, carregar_fornecedores_db, get_lista_nomes_fornecedores, abrir_gerenciador_fornecedores
-from utils import converter_moeda, formatar_moeda, formatar_percentual, auto_selecionar, arredondar_preco, check_nota_duplicada
-from motor_fdc import cache_fdc, carregar_dados_memoria
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler('precificacao.log', encoding='utf-8'),
-        logging.StreamHandler(sys.stdout),
-    ]
-)
-log = logging.getLogger(__name__)
 
 # --- ATIVAÇÃO DE ALTA RESOLUÇÃO ---
 try:
@@ -58,43 +25,57 @@ os.makedirs(pasta_fretes, exist_ok=True)
 DB_PATH = os.path.join(diretorio_atual, "fornecedores.db")
 
 # =====================================================================
-# SPLASH SCREEN (TELA DE CARREGAMENTO INICIAL)
+# SPLASH SCREEN — aparece antes dos imports pesados
 # =====================================================================
 splash = tk.Tk()
 splash.overrideredirect(True)
+splash.attributes("-topmost", True)
 splash_w, splash_h = 400, 200
 splash_x = (splash.winfo_screenwidth() // 2) - (splash_w // 2)
 splash_y = (splash.winfo_screenheight() // 2) - (splash_h // 2)
 splash.geometry(f"{splash_w}x{splash_h}+{splash_x}+{splash_y}")
 splash.configure(bg="#2C3E50")
 
-lbl_icon = tk.Label(splash, text="⏳", font=("Segoe UI", 48), bg="#2C3E50", fg="#F1C40F")
-lbl_icon.pack(pady=(20, 10))
+tk.Label(splash, text="⏳", font=("Segoe UI", 48), bg="#2C3E50", fg="#F1C40F").pack(pady=(20, 10))
 tk.Label(splash, text="Bruno Eletromóveis", font=("Segoe UI", 14, "bold"), bg="#2C3E50", fg="white").pack()
-tk.Label(splash, text="Carregando Engenharia de Custos...", font=("Segoe UI", 10), bg="#2C3E50", fg="#BDC3C7").pack(pady=(5,0))
+tk.Label(splash, text="Carregando Engenharia de Custos...", font=("Segoe UI", 10), bg="#2C3E50", fg="#BDC3C7").pack(pady=(5, 0))
 splash.update()
 
-inicializar_banco_fornecedores(DB_PATH, diretorio_atual)
-cache_fornecedores = carregar_fornecedores_db(DB_PATH)
-splash.destroy()
+# --- IMPORTS PESADOS (executados enquanto o splash está visível) ---
+import re
+import pandas as pd
+from tkinter import ttk, messagebox, filedialog
+import glob
+import ttkbootstrap as ttkb
+from ttkbootstrap.constants import *
 
-# =====================================================================
-# SPLASH SCREEN (TELA DE CARREGAMENTO INICIAL)
-# =====================================================================
-splash = tk.Tk()
-splash.overrideredirect(True)
-splash_w, splash_h = 400, 200
-splash_x = (splash.winfo_screenwidth() // 2) - (splash_w // 2)
-splash_y = (splash.winfo_screenheight() // 2) - (splash_h // 2)
-splash.geometry(f"{splash_w}x{splash_h}+{splash_x}+{splash_y}")
-splash.configure(bg="#2C3E50")
+try:
+    from ttkbootstrap.widgets import ToolTip
+except ImportError:
+    from ttkbootstrap.tooltip import ToolTip
 
-lbl_icon = tk.Label(splash, text="⏳", font=("Segoe UI", 48), bg="#2C3E50", fg="#F1C40F")
-lbl_icon.pack(pady=(20, 10))
-tk.Label(splash, text="Bruno Eletromóveis", font=("Segoe UI", 14, "bold"), bg="#2C3E50", fg="white").pack()
-tk.Label(splash, text="Carregando Engenharia de Custos...", font=("Segoe UI", 10), bg="#2C3E50", fg="#BDC3C7").pack(pady=(5,0))
-splash.update()
+from datetime import datetime
+import time
+import logging
+import shutil
 
+from edicao_de_fretes import abrir_modulo_fretes
+from exportacao import processar_exportacao_carga, salvar_edicao_precos
+from db_fornecedores import inicializar_banco_fornecedores, carregar_fornecedores_db, get_lista_nomes_fornecedores, abrir_gerenciador_fornecedores
+from utils import converter_moeda, formatar_moeda, formatar_percentual, auto_selecionar, arredondar_preco, check_nota_duplicada
+from motor_fdc import cache_fdc, carregar_dados_memoria
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.FileHandler('precificacao.log', encoding='utf-8'),
+        logging.StreamHandler(sys.stdout),
+    ]
+)
+log = logging.getLogger(__name__)
+
+# --- INICIALIZAÇÃO DO BANCO (enquanto splash ainda está visível) ---
 inicializar_banco_fornecedores(DB_PATH, diretorio_atual)
 cache_fornecedores = carregar_fornecedores_db(DB_PATH)
 splash.destroy()
