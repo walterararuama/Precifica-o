@@ -9,7 +9,7 @@ import tempfile
 import webbrowser
 
 def inicializar_banco_fornecedores(db_path, diretorio_atual):
-    with sqlite3.connect(db_path) as conn:
+    with sqlite3.connect(db_path, timeout=10) as conn:
         cursor = conn.cursor()
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS fornecedores (
@@ -48,7 +48,7 @@ def inicializar_banco_fornecedores(db_path, diretorio_atual):
 
 def carregar_fornecedores_db(db_path):
     try:
-        with sqlite3.connect(db_path) as conn:
+        with sqlite3.connect(db_path, timeout=10) as conn:
             conn.row_factory = sqlite3.Row
             return [dict(row) for row in conn.cursor().execute("SELECT * FROM fornecedores ORDER BY fabricante").fetchall()]
     except: return []
@@ -102,7 +102,7 @@ def abrir_gerenciador_fornecedores(root, combo_forn, db_path):
     def ao_selecionar(event):
         try:
             valores = tree.item(tree.selection()[0], "values"); id_selecionado.set(valores[0])
-            with sqlite3.connect(db_path) as conn:
+            with sqlite3.connect(db_path, timeout=10) as conn:
                 dados = conn.cursor().execute("SELECT fabricante, uf, ipi_calculo, frete, markup FROM fornecedores WHERE id=?", (valores[0],)).fetchone()
             for key in entradas: entradas[key].delete(0, tk.END)
             entradas["fabricante"].insert(0, dados[0] or ""); entradas["uf"].insert(0, dados[1] or "")
@@ -122,21 +122,27 @@ def abrir_gerenciador_fornecedores(root, combo_forn, db_path):
 
             ipi_val = max(0.0, ipi_raw) / 100.0
             frete_val = max(0.0, frete_raw) / 100.0
-            markup_val = max(1.0, markup_raw) / 100.0 
+            markup_val = max(1.0, markup_raw) / 100.0
 
-            with sqlite3.connect(db_path) as conn:
+            with sqlite3.connect(db_path, timeout=10) as conn:
                 if id_selecionado.get(): conn.cursor().execute('UPDATE fornecedores SET fabricante=?, uf=?, ipi_calculo=?, frete=?, markup=? WHERE id=?', (fab, uf, ipi_val, frete_val, markup_val, id_selecionado.get()))
                 else: conn.cursor().execute('INSERT INTO fornecedores (fabricante, uf, ipi_calculo, frete, markup) VALUES (?, ?, ?, ?, ?)', (fab, uf, ipi_val, frete_val, markup_val))
                 conn.commit()
             carregar_dados(); limpar_form()
-            
+
             combo_forn.master_list = get_lista_nomes_fornecedores(db_path)
             combo_forn['values'] = combo_forn.master_list
             if hasattr(root, 'atualizar_cache_fornecedores'):
                 root.atualizar_cache_fornecedores()
-            
+
             messagebox.showinfo("Sucesso", "Fornecedor salvo!", parent=janela_forn)
-        except Exception as e: messagebox.showerror("Erro", f"Falha ao salvar: {e}", parent=janela_forn)
+        except sqlite3.OperationalError as e:
+            if "database is locked" in str(e):
+                messagebox.showwarning("Banco Ocupado", "O sistema está sendo usado por outro usuário.\nAguarde alguns segundos e tente novamente.", parent=janela_forn)
+            else:
+                messagebox.showerror("Erro", f"Falha ao salvar: {e}", parent=janela_forn)
+        except Exception as e:
+            messagebox.showerror("Erro", f"Falha ao salvar: {e}", parent=janela_forn)
         
         return "break"
 
@@ -148,14 +154,20 @@ def abrir_gerenciador_fornecedores(root, combo_forn, db_path):
             confirmou = messagebox.askyesno("Confirmar", "Deseja apagar o fornecedor selecionado?", parent=top)
             top.destroy()
             if confirmou:
-                with sqlite3.connect(db_path) as conn: 
-                    conn.cursor().execute("DELETE FROM fornecedores WHERE id=?", (id_selecionado.get(),))
-                carregar_dados()
-                limpar_form()
-                combo_forn.master_list = get_lista_nomes_fornecedores(db_path)
-                combo_forn['values'] = combo_forn.master_list
-                if hasattr(root, 'atualizar_cache_fornecedores'):
-                    root.atualizar_cache_fornecedores()
+                try:
+                    with sqlite3.connect(db_path, timeout=10) as conn:
+                        conn.cursor().execute("DELETE FROM fornecedores WHERE id=?", (id_selecionado.get(),))
+                    carregar_dados()
+                    limpar_form()
+                    combo_forn.master_list = get_lista_nomes_fornecedores(db_path)
+                    combo_forn['values'] = combo_forn.master_list
+                    if hasattr(root, 'atualizar_cache_fornecedores'):
+                        root.atualizar_cache_fornecedores()
+                except sqlite3.OperationalError as e:
+                    if "database is locked" in str(e):
+                        messagebox.showwarning("Banco Ocupado", "O sistema está sendo usado por outro usuário.\nAguarde alguns segundos e tente novamente.", parent=janela_forn)
+                    else:
+                        messagebox.showerror("Erro", f"Falha ao apagar: {e}", parent=janela_forn)
 
     def limpar_form():
         id_selecionado.set(""); [ent.delete(0, tk.END) for ent in entradas.values()]; entradas["fabricante"].focus_set()

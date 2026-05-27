@@ -3,6 +3,8 @@ import sys
 import os
 import tkinter as tk
 import ctypes
+import configparser
+import sqlite3 as _sqlite3_cfg
 
 # --- ATIVAÇÃO DE ALTA RESOLUÇÃO ---
 try:
@@ -22,7 +24,27 @@ os.makedirs(pasta_arquivo, exist_ok=True)
 pasta_fretes = os.path.join(diretorio_atual, "FRETES")
 os.makedirs(pasta_fretes, exist_ok=True)
 
-DB_PATH = os.path.join(diretorio_atual, "fornecedores.db")
+_CONFIG_INI_NOVO = False
+
+def _ler_db_path():
+    global _CONFIG_INI_NOVO
+    _cfg = configparser.ConfigParser()
+    _ini = os.path.join(diretorio_atual, "config.ini")
+    if os.path.exists(_ini):
+        _cfg.read(_ini, encoding='utf-8')
+        return _cfg.get("banco", "caminho", fallback=os.path.join(diretorio_atual, "fornecedores.db"))
+    else:
+        _CONFIG_INI_NOVO = True
+        _default = os.path.join(diretorio_atual, "fornecedores.db")
+        _cfg["banco"] = {"caminho": _default}
+        try:
+            with open(_ini, "w", encoding="utf-8") as _f:
+                _cfg.write(_f)
+        except Exception:
+            pass
+        return _default
+
+DB_PATH = _ler_db_path()
 
 # =====================================================================
 # SPLASH SCREEN — aparece antes dos imports pesados
@@ -188,11 +210,22 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-_splash_set(98, "Inicializando banco de fornecedores...")
-inicializar_banco_fornecedores(DB_PATH, diretorio_atual)
+_splash_set(97, "Validando acesso ao banco de dados...")
+_banco_acessivel = True
+try:
+    inicializar_banco_fornecedores(DB_PATH, diretorio_atual)
+except Exception as _e_banco:
+    _banco_acessivel = False
+    from tkinter import messagebox as _mb
+    _mb.showerror(
+        "Banco de Dados Inacessível",
+        f"Não foi possível acessar o banco de dados em:\n{DB_PATH}\n\nErro: {_e_banco}\n\n"
+        "Verifique o caminho em Configurações → Banco de Dados após o sistema abrir.",
+        parent=splash
+    )
 
 _splash_set(100, "Concluído! Abrindo o sistema...")
-cache_fornecedores = carregar_fornecedores_db(DB_PATH)
+cache_fornecedores = carregar_fornecedores_db(DB_PATH) if _banco_acessivel else []
 
 splash.after(450, splash.destroy)
 splash.mainloop()
@@ -350,6 +383,95 @@ def criar_tela():
             style.configure("SubVenda.TLabel", background="#0d2b1f", foreground="white", font=("Segoe UI", 9, "bold"), anchor="center", justify="center")
 
     atualizar_estilos()
+
+    def abrir_config_banco(primeiro_acesso=False):
+        global DB_PATH
+        janela_cfg = tk.Toplevel(root)
+        janela_cfg.title("Configurações — Banco de Dados")
+        janela_cfg.resizable(False, False)
+        janela_cfg.transient(root)
+        janela_cfg.grab_set()
+        janela_cfg.update_idletasks()
+        larg, alt = 620, 230
+        x = root.winfo_x() + (root.winfo_width() // 2) - larg // 2
+        y = root.winfo_y() + (root.winfo_height() // 2) - alt // 2
+        janela_cfg.geometry(f"{larg}x{alt}+{x}+{y}")
+
+        if primeiro_acesso:
+            ttkb.Label(janela_cfg,
+                text="Primeiro acesso: o arquivo config.ini foi criado com o caminho padrão.\n"
+                     "Se este computador usa banco compartilhado em rede, configure o caminho abaixo.",
+                font=("Segoe UI", 9), bootstyle="warning", padding=8).pack(fill="x", padx=10, pady=(8,0))
+
+        f_cfg = ttkb.Labelframe(janela_cfg, text=" Caminho do Banco de Dados (fornecedores.db) ", padding=12)
+        f_cfg.pack(fill="both", expand=True, padx=10, pady=8)
+
+        var_cam = tk.StringVar(value=DB_PATH)
+        ent_cam = ttkb.Entry(f_cfg, textvariable=var_cam, font=("Segoe UI", 10), width=58)
+        ent_cam.grid(row=0, column=0, padx=(0, 5), pady=6, sticky="ew")
+
+        def _browse():
+            import tkinter.filedialog as _fd
+            p = _fd.asksaveasfilename(
+                title="Selecionar / criar banco de dados",
+                defaultextension=".db",
+                filetypes=[("SQLite Database", "*.db"), ("Todos os arquivos", "*.*")],
+                initialfile="fornecedores.db",
+                parent=janela_cfg
+            )
+            if p:
+                var_cam.set(p)
+
+        ttkb.Button(f_cfg, text="📂", command=_browse, bootstyle="secondary", width=3).grid(row=0, column=1)
+
+        lbl_status = ttkb.Label(f_cfg, text="", font=("Segoe UI", 9))
+        lbl_status.grid(row=1, column=0, columnspan=2, sticky="w", pady=(0, 4))
+
+        def _testar():
+            try:
+                c = _sqlite3_cfg.connect(var_cam.get().strip(), timeout=10)
+                c.close()
+                lbl_status.config(text="✅ Conexão bem-sucedida!", foreground="#27ae60")
+            except Exception as e:
+                lbl_status.config(text=f"❌ Falha: {e}", foreground="#e74c3c")
+
+        def _salvar():
+            global DB_PATH
+            caminho = var_cam.get().strip()
+            if not caminho:
+                messagebox.showerror("Erro", "Informe um caminho válido.", parent=janela_cfg)
+                return
+            try:
+                c = _sqlite3_cfg.connect(caminho, timeout=10)
+                c.close()
+            except Exception as e:
+                if not messagebox.askyesno(
+                    "Aviso",
+                    f"Não foi possível conectar ao banco neste caminho:\n{e}\n\nSalvar mesmo assim?",
+                    parent=janela_cfg
+                ):
+                    return
+            _cfg_w = configparser.ConfigParser()
+            _cfg_w["banco"] = {"caminho": caminho}
+            _ini_path = os.path.join(diretorio_atual, "config.ini")
+            with open(_ini_path, "w", encoding="utf-8") as _fini:
+                _cfg_w.write(_fini)
+            DB_PATH = caminho
+            try:
+                inicializar_banco_fornecedores(DB_PATH, diretorio_atual)
+                root.atualizar_cache_fornecedores()
+            except Exception:
+                pass
+            messagebox.showinfo("Salvo", f"Caminho salvo:\n{caminho}", parent=janela_cfg)
+            janela_cfg.destroy()
+
+        f_btns = ttkb.Frame(f_cfg)
+        f_btns.grid(row=2, column=0, columnspan=2, pady=6)
+        ttkb.Button(f_btns, text="🔌 Testar Conexão", command=_testar, bootstyle="info").pack(side="left", padx=5)
+        ttkb.Button(f_btns, text="💾 Salvar", command=_salvar, bootstyle="success").pack(side="left", padx=5)
+        ttkb.Button(f_btns, text="Cancelar", command=janela_cfg.destroy, bootstyle="secondary").pack(side="left", padx=5)
+
+        f_cfg.grid_columnconfigure(0, weight=1)
 
     def sair_seguro():
         root.ignorando_validacao = True
@@ -541,6 +663,7 @@ def criar_tela():
     tk.Button(f_header, text="✖ Sair", bg="#FF0000", activebackground="#CC0000", activeforeground="white", fg="white", font=("Segoe UI", 10, "bold"), relief=tk.FLAT, cursor="hand2", padx=15, pady=5, command=sair_seguro).pack(side="right")
     btn_tema = tk.Button(f_header, text="🌙 Modo Noite", bg="#2c3e50", fg="white", font=("Segoe UI", 9, "bold"), relief=tk.FLAT, cursor="hand2", padx=10, command=alternar_tema)
     btn_tema.pack(side="right", padx=10)
+    tk.Button(f_header, text="⚙️ Banco", bg="#2980b9", activebackground="#1a6090", fg="white", font=("Segoe UI", 9, "bold"), relief=tk.FLAT, cursor="hand2", padx=10, command=abrir_config_banco).pack(side="right", padx=5)
 
     # ÁREA DE NOTA — layout adaptativo à resolução
     f_dados_nota = ttkb.Frame(root, padding=(8, 4))
@@ -1930,6 +2053,8 @@ def criar_tela():
     root.bind("<Control-F>", lambda e: pesquisar_carga_salva())
 
     root.after(100, lambda: limpar_nota(pergunta=False, add_linha=True))
+    if _CONFIG_INI_NOVO:
+        root.after(600, lambda: abrir_config_banco(primeiro_acesso=True))
     root.mainloop()
 
 if __name__ == "__main__":

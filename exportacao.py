@@ -158,7 +158,7 @@ def _atualizar_planilha_blog(dados):
     
     uf_fornecedor = ""
     try:
-        with sqlite3.connect(dados['db_path']) as conn:
+        with sqlite3.connect(dados['db_path'], timeout=10) as conn:
             res = conn.cursor().execute("SELECT uf FROM fornecedores WHERE fabricante=?", (forn,)).fetchone()
             if res: uf_fornecedor = res[0]
     except: pass
