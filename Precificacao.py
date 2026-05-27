@@ -1,3 +1,4 @@
+import re
 import sys
 import pandas as pd
 import os
@@ -56,9 +57,47 @@ os.makedirs(pasta_fretes, exist_ok=True)
 
 DB_PATH = os.path.join(diretorio_atual, "fornecedores.db")
 
-# Inicializar Base de Dados e Cache
+# =====================================================================
+# SPLASH SCREEN (TELA DE CARREGAMENTO INICIAL)
+# =====================================================================
+splash = tk.Tk()
+splash.overrideredirect(True)
+splash_w, splash_h = 400, 200
+splash_x = (splash.winfo_screenwidth() // 2) - (splash_w // 2)
+splash_y = (splash.winfo_screenheight() // 2) - (splash_h // 2)
+splash.geometry(f"{splash_w}x{splash_h}+{splash_x}+{splash_y}")
+splash.configure(bg="#2C3E50")
+
+lbl_icon = tk.Label(splash, text="⏳", font=("Segoe UI", 48), bg="#2C3E50", fg="#F1C40F")
+lbl_icon.pack(pady=(20, 10))
+tk.Label(splash, text="Bruno Eletromóveis", font=("Segoe UI", 14, "bold"), bg="#2C3E50", fg="white").pack()
+tk.Label(splash, text="Carregando Engenharia de Custos...", font=("Segoe UI", 10), bg="#2C3E50", fg="#BDC3C7").pack(pady=(5,0))
+splash.update()
+
 inicializar_banco_fornecedores(DB_PATH, diretorio_atual)
 cache_fornecedores = carregar_fornecedores_db(DB_PATH)
+splash.destroy()
+
+# =====================================================================
+# SPLASH SCREEN (TELA DE CARREGAMENTO INICIAL)
+# =====================================================================
+splash = tk.Tk()
+splash.overrideredirect(True)
+splash_w, splash_h = 400, 200
+splash_x = (splash.winfo_screenwidth() // 2) - (splash_w // 2)
+splash_y = (splash.winfo_screenheight() // 2) - (splash_h // 2)
+splash.geometry(f"{splash_w}x{splash_h}+{splash_x}+{splash_y}")
+splash.configure(bg="#2C3E50")
+
+lbl_icon = tk.Label(splash, text="⏳", font=("Segoe UI", 48), bg="#2C3E50", fg="#F1C40F")
+lbl_icon.pack(pady=(20, 10))
+tk.Label(splash, text="Bruno Eletromóveis", font=("Segoe UI", 14, "bold"), bg="#2C3E50", fg="white").pack()
+tk.Label(splash, text="Carregando Engenharia de Custos...", font=("Segoe UI", 10), bg="#2C3E50", fg="#BDC3C7").pack(pady=(5,0))
+splash.update()
+
+inicializar_banco_fornecedores(DB_PATH, diretorio_atual)
+cache_fornecedores = carregar_fornecedores_db(DB_PATH)
+splash.destroy()
 
 # =====================================================================
 # --- TELA PRINCIPAL ---
@@ -409,8 +448,17 @@ def criar_tela():
 
     def validar_pedido(event=None):
         if check_and_trap(not var_pedido.get().strip(), ent_pedido, "Preencha o Pedido"): return "break"
+        if event and getattr(event, 'keysym', '') in ['Return', 'Tab']: return pular_foco(combo_regime)
+        
+    ent_pedido.bind("<Return>", validar_pedido)
+    ent_pedido.bind("<Tab>", validar_pedido)
+    ent_pedido.bind("<FocusOut>", lambda e: validar_pedido() if not safe_is_focused(ent_pedido) else None)
+
+    def nav_regime(event=None):
         if event and getattr(event, 'keysym', '') in ['Return', 'Tab']: return pular_foco(ent_nota)
-    ent_pedido.bind("<Return>", validar_pedido); ent_pedido.bind("<Tab>", validar_pedido); ent_pedido.bind("<FocusOut>", lambda e: validar_pedido() if not safe_is_focused(ent_pedido) else None)
+
+    combo_regime.bind("<Return>", nav_regime)
+    combo_regime.bind("<Tab>", nav_regime)
 
     def validar_saida_nota(event=None):
         if check_and_trap(not var_num_nota.get().strip(), ent_nota, "Preencha a Nota"): return "break"
@@ -517,15 +565,6 @@ def criar_tela():
 
     ent_emissao.bind("<KeyRelease>", lambda e: aplicar_mascara_data(e, var_dt_emissao, ent_emissao))
     ent_chegada.bind("<KeyRelease>", lambda e: aplicar_mascara_data(e, var_dt_chegada, ent_chegada))
-
-    # =========================================================
-    # BARRA DE AÇÕES E ALERTAS (REFORMULADA SEM FUNDOS FIXOS)
-    # =========================================================
-    f_controle = ttkb.Frame(root, padding=5)
-    f_controle.pack(fill="x", side="top", padx=20)
-    
-    f_botoes_acao = ttkb.Frame(f_controle)
-    f_botoes_acao.pack(side="left")
 
     # =====================================================================
     # --- CONTAINER DA TABELA ---
@@ -770,7 +809,7 @@ def criar_tela():
             scrollbar = ttk.Scrollbar(frame, orient=VERTICAL)
             bg_list = "white" if getattr(root, 'tema_atual', 'claro') == 'claro' else "#2e3440"
             fg_list = "black" if getattr(root, 'tema_atual', 'claro') == 'claro' else "#eceff4"
-            
+
             listbox = tk.Listbox(frame, yscrollcommand=scrollbar.set, font=("Segoe UI", 10), bg=bg_list, fg=fg_list, selectbackground="#3498DB", selectforeground="white")
             scrollbar.config(command=listbox.yview)
             scrollbar.pack(side=RIGHT, fill=Y)
@@ -779,55 +818,52 @@ def criar_tela():
             for _, r in resultados.iterrows(): listbox.insert(END, f"{r['_cod_str']} - {r['_nome_str']}")
 
             def select_item(event=None):
-                if not listbox or not listbox.winfo_exists() or not listbox.curselection(): 
+                if not listbox or not listbox.winfo_exists() or not listbox.curselection():
                     return "break"
                 selecionado = listbox.get(listbox.curselection())
                 cod_selecionado = selecionado.split(' - ')[0].strip()
                 var_cod.set(cod_selecionado)
-                
                 # BLINDAGEM CONTRA O CRASH DO TKINTER (SEGFAULT)
                 root.after(10, close_listbox)
-                
                 if buscar_produto(row_data):
                     root.after(50, lambda: focus_qtd(row_data['e_qtd_nf']))
                 return "break"
-                
+
             listbox.bind("<Double-Button-1>", select_item)
             listbox.bind("<Return>", select_item)
             listbox.bind("<Escape>", close_listbox)
-            
+
             def check_scroll_click(e):
                 if e.widget == scrollbar: return
                 root.after(100, lambda: close_listbox() if listbox_window and root.focus_get() != listbox and root.focus_get() != scrollbar else None)
             listbox.bind("<FocusOut>", check_scroll_click)
 
-        def handle_keys(e):
-            if listbox_window and listbox:
-                if e.keysym == 'Down':
-                    listbox.focus_set()
-                    listbox.selection_set(0)
-                    return "break"
-                elif e.keysym == 'Return':
-                    if listbox.size() > 0:
+            def handle_keys(e):
+                if listbox_window and listbox:
+                    if e.keysym == 'Down':
+                        listbox.focus_set()
                         listbox.selection_set(0)
-                        select_item()
-                    return "break"
-                elif e.keysym == 'Escape':
-                    close_listbox()
+                        return "break"
+                    elif e.keysym == 'Return':
+                        if listbox.size() > 0:
+                            listbox.selection_set(0)
+                            select_item()
+                        return "break"
+                    elif e.keysym == 'Escape':
+                        close_listbox()
+                        return "break"
+
+            def on_entry_return(e):
+                if listbox_window and listbox and listbox.winfo_exists() and listbox.size() > 0:
+                    listbox.selection_set(0)
+                    select_item()
                     return "break"
 
-        # Função que aciona a seleção sem gerar evento fantasma
-        def on_entry_return(e):
-            if listbox_window and listbox and listbox.winfo_exists() and listbox.size() > 0:
-                listbox.selection_set(0)
-                select_item()
-                return "break"
-                
-        entry_widget.force_select_first = on_entry_return
+            entry_widget.force_select_first = on_entry_return
+            entry_widget.bind('<Down>', handle_keys)
+            entry_widget.bind('<Escape>', handle_keys)
 
         entry_widget.bind('<KeyRelease>', update_listbox)
-        entry_widget.bind('<Down>', handle_keys)
-        entry_widget.bind('<Escape>', handle_keys)
 
     def buscar_produto(row_data):
         codigo = row_data['var_cod'].get().strip()
@@ -1405,23 +1441,31 @@ def criar_tela():
             
             # === FUNÇÃO DE COPIAR EMBUTIDA NA AUDITORIA ===
             def copiar_resumo_area_transferencia():
+                # Cabeçalho da mensagem
                 texto_copia = f"📌 *RESUMO DE PRECIFICAÇÃO - {combo_forn.get()}*\n"
                 texto_copia += f"📝 Nota: {var_num_nota.get()} | Pedido: {var_pedido.get()}\n"
                 texto_copia += f"==============================\n\n"
+
+                # Loop pelos produtos
                 for r in linhas_nota:
-                    if r['var_cod'].get().strip() and r['var_nome'].get() not in ["---", "❌ PRODUTO NÃO ENCONTRADO"]:
-                        cod   = r['var_cod'].get().strip()
-                        nome  = r['var_nome'].get()
+                    nome = r['var_nome'].get()
+                    if r['var_cod'].get().strip() and nome not in ["---", "❌ PRODUTO NÃO ENCONTRADO"]:
                         custo = r['var_novo_custo'].get()
                         venda = r['var_venda'].get()
-                        mkp   = r['var_mkp_real'].get()
                         prazo = r['var_prazo'].get()
-                        texto_copia += f"▪ Cód: {cod} | {nome}\n   Custo: {custo} | Venda: {venda} | Markup: {mkp} | Prazo: {prazo}\n\n"
+                        texto_copia += f"▪ {nome}\n   Custo: {custo} | Venda: {venda} | Prazo: {prazo}\n\n"
+                        
                 texto_copia += f"==============================\n"
-                texto_copia += lbl_res_formula.cget("text")
+
+                # Limpeza do rodapé
+                resumo_base = lbl_res_formula.cget("text")
+                resumo_limpo = re.sub(r'Itens:\s*\d+\s*\|\s*', '', resumo_base)
+                
+                texto_copia += resumo_limpo + "\n\nBoas vendas!"
+                
                 root.clipboard_clear()
                 root.clipboard_append(texto_copia)
-                messagebox.showinfo("Copiado!", "Resumo copiado para a área de transferência!\n\nAgora é só apertar Ctrl+V no WhatsApp do seu chefe.")
+                messagebox.showinfo("Copiado!", "Resumo copiado para o WhatsApp!")
 
             def copiar_aviso_lojas():
                 regime_av = var_regime.get()
