@@ -17,13 +17,6 @@ if getattr(sys, 'frozen', False):
 else:
     diretorio_atual = os.path.dirname(os.path.abspath(__file__))
 
-# --- CRIAÇÃO DAS PASTAS ---
-pasta_arquivo = os.path.join(diretorio_atual, "ARQUIVO")
-os.makedirs(pasta_arquivo, exist_ok=True)
-
-pasta_fretes = os.path.join(diretorio_atual, "FRETES")
-os.makedirs(pasta_fretes, exist_ok=True)
-
 _CONFIG_INI_NOVO = False
 
 def _ler_db_path():
@@ -45,6 +38,27 @@ def _ler_db_path():
         return _default
 
 DB_PATH = _ler_db_path()
+
+# --- CRIAÇÃO DAS PASTAS (relativas ao diretório do banco de dados) ---
+def _criar_pastas(db_path):
+    global pasta_arquivo, pasta_fretes
+    _db_dir = os.path.dirname(db_path) or diretorio_atual
+    try:
+        pasta_arquivo = os.path.join(_db_dir, "ARQUIVO")
+        os.makedirs(pasta_arquivo, exist_ok=True)
+    except Exception:
+        pasta_arquivo = os.path.join(diretorio_atual, "ARQUIVO")
+        os.makedirs(pasta_arquivo, exist_ok=True)
+    try:
+        pasta_fretes = os.path.join(_db_dir, "FRETES")
+        os.makedirs(pasta_fretes, exist_ok=True)
+    except Exception:
+        pasta_fretes = os.path.join(diretorio_atual, "FRETES")
+        os.makedirs(pasta_fretes, exist_ok=True)
+
+pasta_arquivo = ""
+pasta_fretes  = ""
+_criar_pastas(DB_PATH)
 
 # =====================================================================
 # SPLASH SCREEN — aparece antes dos imports pesados
@@ -412,11 +426,9 @@ def criar_tela():
 
         def _browse():
             import tkinter.filedialog as _fd
-            p = _fd.asksaveasfilename(
-                title="Selecionar / criar banco de dados",
-                defaultextension=".db",
+            p = _fd.askopenfilename(
+                title="Selecionar banco de dados existente",
                 filetypes=[("SQLite Database", "*.db"), ("Todos os arquivos", "*.*")],
-                initialfile="fornecedores.db",
                 parent=janela_cfg
             )
             if p:
@@ -457,12 +469,13 @@ def criar_tela():
             with open(_ini_path, "w", encoding="utf-8") as _fini:
                 _cfg_w.write(_fini)
             DB_PATH = caminho
+            _criar_pastas(DB_PATH)
             try:
                 inicializar_banco_fornecedores(DB_PATH, diretorio_atual)
                 root.atualizar_cache_fornecedores()
             except Exception:
                 pass
-            messagebox.showinfo("Salvo", f"Caminho salvo:\n{caminho}", parent=janela_cfg)
+            messagebox.showinfo("Salvo", f"Caminho salvo:\n{caminho}\n\nPastas de trabalho:\n{pasta_arquivo}\n{pasta_fretes}", parent=janela_cfg)
             janela_cfg.destroy()
 
         f_btns = ttkb.Frame(f_cfg)
