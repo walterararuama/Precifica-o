@@ -5,7 +5,7 @@ a = Analysis(
     ['Precificacao.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('voga.png', '.'), ('icone.ico', '.')],
     hiddenimports=[
         # openpyxl (leitura/escrita de Excel)
         'openpyxl',
@@ -100,5 +100,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=None,
+    icon='icone.ico',
 )

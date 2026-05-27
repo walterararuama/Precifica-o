@@ -147,6 +147,7 @@ from datetime import datetime
 import time
 import logging
 import shutil
+from PIL import Image, ImageTk
 
 _splash_set(68, "Carregando módulo de fretes...")
 from edicao_de_fretes import abrir_modulo_fretes
@@ -187,12 +188,34 @@ splash.mainloop()
 # --- TELA PRINCIPAL ---
 # =====================================================================
 
+def _get_recurso(nome):
+    if getattr(sys, 'frozen', False):
+        return os.path.join(sys._MEIPASS, nome)
+    return os.path.join(diretorio_atual, nome)
+
+def _criar_logo_img(pil_rgba, hex_bg):
+    r, g, b = int(hex_bg[1:3], 16), int(hex_bg[3:5], 16), int(hex_bg[5:7], 16)
+    bg = Image.new("RGBA", pil_rgba.size, (r, g, b, 255))
+    bg.paste(pil_rgba, mask=pil_rgba.split()[3])
+    return ImageTk.PhotoImage(bg.convert("RGB"))
+
 def criar_tela():
     global cache_fornecedores
     root = ttkb.Window(themename="litera")
     root.title("Bruno Eletromóveis - Engenharia de Custos V4")
     root.geometry("1400x850")
     root.state('zoomed')
+
+    try:
+        root.iconbitmap(_get_recurso("icone.ico"))
+    except Exception:
+        pass
+    try:
+        _logo_rgba = Image.open(_get_recurso("voga.png")).convert("RGBA")
+        _logo_rgba.thumbnail((9999, 40), Image.LANCZOS)
+    except Exception:
+        _logo_rgba = None
+    lbl_logo = None
 
     root.tema_atual = "claro"
 
@@ -485,46 +508,88 @@ def criar_tela():
             rd['e_prazo'].config(bg=c_venda, fg=f_venda, insertbackground=f_e); rd['e_prazo'].bg_padrao = c_venda
             rd['e_mkp'].config(bg=c_venda, readonlybackground=c_venda, fg=f_venda); rd['e_mkp'].bg_padrao = c_venda
 
+        if _logo_rgba and lbl_logo:
+            try:
+                hex_bg = style.colors.primary
+                if not hex_bg.startswith("#"):
+                    hex_bg = "#" + hex_bg
+                _img = _criar_logo_img(_logo_rgba, hex_bg)
+                lbl_logo.config(image=_img, bg=hex_bg)
+                lbl_logo.image = _img
+            except Exception:
+                pass
+
     tk.Button(f_header, text="✖ Sair", bg="#FF0000", activebackground="#CC0000", activeforeground="white", fg="white", font=("Segoe UI", 10, "bold"), relief=tk.FLAT, cursor="hand2", padx=15, pady=5, command=sair_seguro).pack(side="right")
     btn_tema = tk.Button(f_header, text="🌙 Modo Noite", bg="#2c3e50", fg="white", font=("Segoe UI", 9, "bold"), relief=tk.FLAT, cursor="hand2", padx=10, command=alternar_tema)
     btn_tema.pack(side="right", padx=10)
 
-    # REFORMULANDO A ÁREA DE NOTA (SEM FUNDOS FIXOS)
-    f_dados_nota = ttkb.Frame(root, padding=8)
+    if _logo_rgba:
+        try:
+            hex_bg = style.colors.primary
+            if not hex_bg.startswith("#"):
+                hex_bg = "#" + hex_bg
+            _img_logo = _criar_logo_img(_logo_rgba, hex_bg)
+            lbl_logo = tk.Label(f_header, image=_img_logo, bg=hex_bg, bd=0)
+            lbl_logo.image = _img_logo
+            lbl_logo.pack(side="right", padx=(0, 12))
+        except Exception:
+            pass
+
+    # ÁREA DE NOTA — layout adaptativo à resolução
+    f_dados_nota = ttkb.Frame(root, padding=(8, 4))
     f_dados_nota.pack(fill="x", side="top", padx=20)
 
-    lbl_nota = ttkb.Label(f_dados_nota, text="Nº DA NOTA:", font=("Segoe UI", 9, "bold"))
-    lbl_nota.pack(side="left", padx=(0, 2))
-    ToolTip(lbl_nota, text="Atalho: Ctrl + N")
-    
-    ent_nota = ttkb.Entry(f_dados_nota, textvariable=var_num_nota, width=15, font=("Segoe UI", 10))
-    ent_nota.pack(side="left", padx=5)
-    ToolTip(ent_nota, text="Atalho: Ctrl + N")
+    _tela_larga = root.winfo_screenwidth() >= 1500
 
-    lbl_emissao = ttkb.Label(f_dados_nota, text="DT. EMISSÃO:", font=("Segoe UI", 9, "bold"))
-    lbl_emissao.pack(side="left", padx=(20, 2))
-    ent_emissao = ttkb.Entry(f_dados_nota, textvariable=var_dt_emissao, width=12, font=("Segoe UI", 10), justify="center")
-    ent_emissao.pack(side="left", padx=5)
-
-    lbl_chegada = ttkb.Label(f_dados_nota, text="DT. CHEGADA:", font=("Segoe UI", 9, "bold"))
-    lbl_chegada.pack(side="left", padx=(20, 2))
-    ent_chegada = ttkb.Entry(f_dados_nota, textvariable=var_dt_chegada, width=12, font=("Segoe UI", 10), justify="center")
-    ent_chegada.pack(side="left", padx=5)
-
-    lbl_t_frete = ttkb.Label(f_dados_nota, text="TIPO DE FRETE:", font=("Segoe UI", 9, "bold"))
-    lbl_t_frete.pack(side="left", padx=(30, 2))
-    combo_frete = ttk.Combobox(f_dados_nota, textvariable=var_tipo_frete, values=["FOB", "CIF", "TERCEIRIZADO"], width=15, state="readonly", font=("Segoe UI", 10))
-    combo_frete.pack(side="left", padx=5)
-
-    lbl_t_vlr = ttkb.Label(f_dados_nota, text="VLR TERCEIRO:", font=("Segoe UI", 9, "bold"))
-    lbl_t_vlr.pack(side="left", padx=(20, 2))
-    ent_val_terceiro = ttkb.Entry(f_dados_nota, textvariable=var_val_terceirizado, width=12, font=("Segoe UI", 10, "bold"), justify="right", state="disabled")
-    ent_val_terceiro.pack(side="left", padx=5)
-    
-    lbl_mkp_geral = ttkb.Label(f_dados_nota, text="MARKUP (%):", font=("Segoe UI", 9, "bold"))
-    lbl_mkp_geral.pack(side="left", padx=(20, 2))
-    ent_mkp_geral = ttkb.Entry(f_dados_nota, textvariable=var_markup_geral, width=8, font=("Segoe UI", 10, "bold"), justify="center")
-    ent_mkp_geral.pack(side="left", padx=5)
+    if _tela_larga:
+        # Linha única para telas largas (≥1500px)
+        col = 0
+        lbl_nota = ttkb.Label(f_dados_nota, text="Nº DA NOTA:", font=("Segoe UI", 9, "bold"))
+        lbl_nota.grid(row=0, column=col, sticky="w", padx=(0, 2)); col += 1
+        ToolTip(lbl_nota, text="Atalho: Ctrl + N")
+        ent_nota = ttkb.Entry(f_dados_nota, textvariable=var_num_nota, width=15, font=("Segoe UI", 10))
+        ent_nota.grid(row=0, column=col, sticky="w", padx=(0, 16)); col += 1
+        ToolTip(ent_nota, text="Atalho: Ctrl + N")
+        ttkb.Label(f_dados_nota, text="DT. EMISSÃO:", font=("Segoe UI", 9, "bold")).grid(row=0, column=col, sticky="w", padx=(0, 2)); col += 1
+        ent_emissao = ttkb.Entry(f_dados_nota, textvariable=var_dt_emissao, width=12, font=("Segoe UI", 10), justify="center")
+        ent_emissao.grid(row=0, column=col, sticky="w", padx=(0, 16)); col += 1
+        ttkb.Label(f_dados_nota, text="DT. CHEGADA:", font=("Segoe UI", 9, "bold")).grid(row=0, column=col, sticky="w", padx=(0, 2)); col += 1
+        ent_chegada = ttkb.Entry(f_dados_nota, textvariable=var_dt_chegada, width=12, font=("Segoe UI", 10), justify="center")
+        ent_chegada.grid(row=0, column=col, sticky="w", padx=(0, 16)); col += 1
+        ttkb.Label(f_dados_nota, text="TIPO DE FRETE:", font=("Segoe UI", 9, "bold")).grid(row=0, column=col, sticky="w", padx=(0, 2)); col += 1
+        combo_frete = ttk.Combobox(f_dados_nota, textvariable=var_tipo_frete, values=["FOB", "CIF", "TERCEIRIZADO"], width=14, state="readonly", font=("Segoe UI", 10))
+        combo_frete.grid(row=0, column=col, sticky="w", padx=(0, 16)); col += 1
+        ttkb.Label(f_dados_nota, text="VLR TERCEIRO:", font=("Segoe UI", 9, "bold")).grid(row=0, column=col, sticky="w", padx=(0, 2)); col += 1
+        ent_val_terceiro = ttkb.Entry(f_dados_nota, textvariable=var_val_terceirizado, width=12, font=("Segoe UI", 10, "bold"), justify="right", state="disabled")
+        ent_val_terceiro.grid(row=0, column=col, sticky="w", padx=(0, 16)); col += 1
+        ttkb.Label(f_dados_nota, text="MARKUP (%):", font=("Segoe UI", 9, "bold")).grid(row=0, column=col, sticky="w", padx=(0, 2)); col += 1
+        ent_mkp_geral = ttkb.Entry(f_dados_nota, textvariable=var_markup_geral, width=8, font=("Segoe UI", 10, "bold"), justify="center")
+        ent_mkp_geral.grid(row=0, column=col, sticky="w")
+    else:
+        # Duas linhas para telas menores (<1500px)
+        # Linha 0: Nota | Emissão | Chegada
+        lbl_nota = ttkb.Label(f_dados_nota, text="Nº DA NOTA:", font=("Segoe UI", 9, "bold"))
+        lbl_nota.grid(row=0, column=0, sticky="w", padx=(0, 2), pady=(0, 4))
+        ToolTip(lbl_nota, text="Atalho: Ctrl + N")
+        ent_nota = ttkb.Entry(f_dados_nota, textvariable=var_num_nota, width=15, font=("Segoe UI", 10))
+        ent_nota.grid(row=0, column=1, sticky="w", padx=(0, 20), pady=(0, 4))
+        ToolTip(ent_nota, text="Atalho: Ctrl + N")
+        ttkb.Label(f_dados_nota, text="DT. EMISSÃO:", font=("Segoe UI", 9, "bold")).grid(row=0, column=2, sticky="w", padx=(0, 2), pady=(0, 4))
+        ent_emissao = ttkb.Entry(f_dados_nota, textvariable=var_dt_emissao, width=12, font=("Segoe UI", 10), justify="center")
+        ent_emissao.grid(row=0, column=3, sticky="w", padx=(0, 20), pady=(0, 4))
+        ttkb.Label(f_dados_nota, text="DT. CHEGADA:", font=("Segoe UI", 9, "bold")).grid(row=0, column=4, sticky="w", padx=(0, 2), pady=(0, 4))
+        ent_chegada = ttkb.Entry(f_dados_nota, textvariable=var_dt_chegada, width=12, font=("Segoe UI", 10), justify="center")
+        ent_chegada.grid(row=0, column=5, sticky="w", pady=(0, 4))
+        # Linha 1: Frete | Vlr Terceiro | Markup
+        ttkb.Label(f_dados_nota, text="TIPO DE FRETE:", font=("Segoe UI", 9, "bold")).grid(row=1, column=0, sticky="w", padx=(0, 2))
+        combo_frete = ttk.Combobox(f_dados_nota, textvariable=var_tipo_frete, values=["FOB", "CIF", "TERCEIRIZADO"], width=14, state="readonly", font=("Segoe UI", 10))
+        combo_frete.grid(row=1, column=1, sticky="w", padx=(0, 20))
+        ttkb.Label(f_dados_nota, text="VLR TERCEIRO:", font=("Segoe UI", 9, "bold")).grid(row=1, column=2, sticky="w", padx=(0, 2))
+        ent_val_terceiro = ttkb.Entry(f_dados_nota, textvariable=var_val_terceirizado, width=12, font=("Segoe UI", 10, "bold"), justify="right", state="disabled")
+        ent_val_terceiro.grid(row=1, column=3, sticky="w", padx=(0, 20))
+        ttkb.Label(f_dados_nota, text="MARKUP (%):", font=("Segoe UI", 9, "bold")).grid(row=1, column=4, sticky="w", padx=(0, 2))
+        ent_mkp_geral = ttkb.Entry(f_dados_nota, textvariable=var_markup_geral, width=8, font=("Segoe UI", 10, "bold"), justify="center")
+        ent_mkp_geral.grid(row=1, column=5, sticky="w")
 
     def validar_fornecedor(event=None):
         if check_and_trap(not combo_forn.get().strip(), combo_forn, "Preencha o Fornecedor"): return "break"
