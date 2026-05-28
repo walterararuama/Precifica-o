@@ -2713,7 +2713,23 @@ def criar_tela():
             def _u():
                 pasta_atual = pasta_var.get()
                 if success:
-                    s, msg, out = carregar_dados_memoria(pasta_atual)
+                    # Copia arquivos processados para a pasta do programa
+                    copiados = []
+                    try:
+                        from preparador_fdc import eh_produto_basico, ARQUIVO_SAIDA_POSICAO
+                        import glob as _gl
+                        arquivos = (_gl.glob(os.path.join(pasta_atual, "*.csv")) +
+                                    _gl.glob(os.path.join(pasta_atual, "*.xlsx")))
+                        for arq in arquivos:
+                            if eh_produto_basico(arq) or os.path.basename(arq).lower() == ARQUIVO_SAIDA_POSICAO.lower():
+                                destino = os.path.join(diretorio_atual, os.path.basename(arq))
+                                shutil.copy2(arq, destino)
+                                copiados.append(os.path.basename(arq))
+                        if copiados:
+                            log_fn(f"\nCopiado para pasta do programa: {', '.join(copiados)}")
+                    except Exception as e:
+                        log_fn(f"\n[AVISO] Não foi possível copiar arquivos: {e}")
+                    s, msg, out = carregar_dados_memoria(diretorio_atual)
                     _atualizar_lbl_fdc(s, msg, out, False)
                     btn_proc.config(state="disabled", text="✅ Concluído", bg="#107C10")
                     btn_fechar.config(bg="#107C10")
@@ -2822,9 +2838,8 @@ def criar_tela():
         return _ler_pasta_fdc() or diretorio_atual
 
     def verificar_db_startup():
-        pasta = _pasta_fdc_efetiva()
-        sucesso, msg, is_outdated = carregar_dados_memoria(pasta)
-        brutos = tem_brutos_novos(pasta) if sucesso else False
+        sucesso, msg, is_outdated = carregar_dados_memoria(diretorio_atual)
+        brutos = tem_brutos_novos(_pasta_fdc_efetiva())
         _atualizar_lbl_fdc(sucesso, msg, is_outdated, brutos)
         if is_outdated:
             messagebox.showwarning("FDC Desatualizado",
@@ -2841,9 +2856,8 @@ def criar_tela():
     # Verificação periódica silenciosa a cada 30 minutos
     def _verificar_fdc_periodicamente():
         try:
-            pasta = _pasta_fdc_efetiva()
-            s, msg, out = carregar_dados_memoria(pasta)
-            brutos = tem_brutos_novos(pasta) if s else False
+            s, msg, out = carregar_dados_memoria(diretorio_atual)
+            brutos = tem_brutos_novos(_pasta_fdc_efetiva())
             _atualizar_lbl_fdc(s, msg, out, brutos)
         except Exception:
             pass
