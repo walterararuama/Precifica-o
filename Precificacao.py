@@ -65,6 +65,23 @@ pasta_arquivo = ""
 pasta_fretes  = ""
 _aplicar_pasta_base(_ler_pasta_base())
 
+def _ler_pasta_fdc():
+    cfg = configparser.ConfigParser()
+    if os.path.exists(_CONFIG_LOCAL_INI):
+        cfg.read(_CONFIG_LOCAL_INI, encoding='utf-8')
+    return cfg.get("fdc", "pasta", fallback=None)
+
+def _salvar_pasta_fdc(pasta):
+    cfg = configparser.ConfigParser()
+    if os.path.exists(_CONFIG_LOCAL_INI):
+        cfg.read(_CONFIG_LOCAL_INI, encoding='utf-8')
+    if "fdc" not in cfg:
+        cfg["fdc"] = {}
+    cfg["fdc"]["pasta"] = pasta
+    os.makedirs(_CONFIG_LOCAL_DIR, exist_ok=True)
+    with open(_CONFIG_LOCAL_INI, "w", encoding="utf-8") as _f:
+        cfg.write(_f)
+
 def _ler_grupo_whatsapp():
     cfg = configparser.ConfigParser()
     if os.path.exists(_CONFIG_LOCAL_INI):
@@ -408,7 +425,7 @@ def criar_tela():
         ("Laranja",        "#E67E22", "#CA6F1E"),
     ]:
         style.configure(f"{_nome}.TButton", background=_bg, foreground="white",
-                        font=("Segoe UI", 10, "bold"), borderwidth=0, padding=6)
+                        font=("Segoe UI", 9, "bold"), borderwidth=0, padding=4)
         style.map(f"{_nome}.TButton",
                   background=[("pressed", _hover), ("active", _hover)],
                   foreground=[("pressed", "white"), ("active", "white")])
@@ -2630,23 +2647,42 @@ def criar_tela():
     # =========================================================
     def abrir_janela_atualizar_fdc():
         from tkinter import scrolledtext as _st
+        from tkinter import filedialog as _fd
         from preparador_fdc import executar as _exec
         import threading as _thr
 
         jan = tk.Toplevel(root)
         jan.title("Atualizar FDC — Processamento de CSVs")
         sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
-        w, h = 660, 480
+        w, h = 680, 520
         jan.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
         jan.transient(root); jan.grab_set(); jan.resizable(False, False)
         jan.config(bg="#1E1E1E")
 
         tk.Label(jan, text="PROCESSAMENTO DE RELATÓRIOS FDC",
-                 font=("Segoe UI", 12, "bold"), bg="#1E1E1E", fg="#D4D4D4", pady=8).pack()
-        tk.Label(jan, text=f"Pasta: {diretorio_atual}",
-                 font=("Segoe UI", 8), bg="#1E1E1E", fg="#888888", wraplength=640).pack()
+                 font=("Segoe UI", 12, "bold"), bg="#1E1E1E", fg="#D4D4D4", pady=6).pack()
 
-        log_area = _st.ScrolledText(jan, height=18, width=80,
+        # Seleção de pasta
+        pasta_var = tk.StringVar(value=_ler_pasta_fdc() or "")
+        f_pasta = tk.Frame(jan, bg="#1E1E1E")
+        f_pasta.pack(fill="x", padx=10, pady=(0, 4))
+        tk.Label(f_pasta, text="Pasta dos CSVs:", font=("Segoe UI", 8, "bold"),
+                 bg="#1E1E1E", fg="#D4D4D4").pack(side="left")
+        lbl_pasta = tk.Label(f_pasta, textvariable=pasta_var, font=("Segoe UI", 8),
+                             bg="#1E1E1E", fg="#888888", wraplength=480, anchor="w", justify="left")
+        lbl_pasta.pack(side="left", padx=6, fill="x", expand=True)
+
+        def _selecionar_pasta():
+            nova = _fd.askdirectory(title="Selecionar pasta com os CSVs do FDC", parent=jan)
+            if nova:
+                pasta_var.set(nova)
+                _salvar_pasta_fdc(nova)
+
+        tk.Button(f_pasta, text="📁 Alterar", font=("Segoe UI", 8), bg="#444444", fg="white",
+                  relief="flat", cursor="hand2", padx=6, pady=2,
+                  command=_selecionar_pasta).pack(side="right")
+
+        log_area = _st.ScrolledText(jan, height=17, width=80,
                                     font=("Consolas", 9), state="disabled",
                                     bg="#1E1E1E", fg="#D4D4D4", insertbackground="white",
                                     relief="flat")
@@ -2675,8 +2711,9 @@ def criar_tela():
 
         def on_done(success):
             def _u():
+                pasta_atual = pasta_var.get()
                 if success:
-                    s, msg, out = carregar_dados_memoria(diretorio_atual)
+                    s, msg, out = carregar_dados_memoria(pasta_atual)
                     _atualizar_lbl_fdc(s, msg, out, False)
                     btn_proc.config(state="disabled", text="✅ Concluído", bg="#107C10")
                     btn_fechar.config(bg="#107C10")
@@ -2686,14 +2723,21 @@ def criar_tela():
             root.after(0, _u)
 
         def iniciar():
+            pasta_atual = pasta_var.get().strip()
+            if not pasta_atual:
+                messagebox.showwarning("Pasta não configurada",
+                    "Selecione a pasta onde estão os CSVs do FDC.", parent=jan)
+                return
             btn_proc.config(state="disabled", text="⏳ Processando...", bg="#555555")
             log_area.config(state="normal"); log_area.delete("1.0", tk.END); log_area.config(state="disabled")
             from datetime import datetime as _dt
             log_fn(f"Iniciado: {_dt.now().strftime('%d/%m/%Y  %H:%M:%S')}")
-            log_fn(f"Pasta: {diretorio_atual}\n")
-            _thr.Thread(target=_exec, args=(diretorio_atual, log_fn, on_done), daemon=True).start()
+            log_fn(f"Pasta: {pasta_atual}\n")
+            _thr.Thread(target=_exec, args=(pasta_atual, log_fn, on_done), daemon=True).start()
 
         btn_proc.config(command=iniciar)
+        if not pasta_var.get():
+            root.after(200, _selecionar_pasta)
 
     # =========================================================
     # BARRA DE AÇÕES E ALERTAS (NOVO LAYOUT)
@@ -2705,31 +2749,31 @@ def criar_tela():
     f_botoes_acao = ttkb.Frame(f_controle)
     f_botoes_acao.pack(side="left")
 
-    btn_add_linha = ttkb.Button(f_botoes_acao, text="➕ ADICIONAR LINHA", style="Lilas.TButton", command=adicionar_linha)
-    btn_add_linha.pack(side="left", padx=5)
-    
+    btn_add_linha = ttkb.Button(f_botoes_acao, text="➕ ADD LINHA", style="Lilas.TButton", command=adicionar_linha)
+    btn_add_linha.pack(side="left", padx=3)
+
     btn_limpar = ttkb.Button(f_botoes_acao, text="🧹 LIMPAR", style="Vermelho.TButton", command=lambda: limpar_nota(pergunta=True))
-    btn_limpar.pack(side="left", padx=5)
-    ToolTip(btn_limpar, text="Limpar todos os campos (Atalho: Ctrl + L)")
+    btn_limpar.pack(side="left", padx=3)
+    ToolTip(btn_limpar, text="Limpar todos os campos (Ctrl+L)")
 
-    btn_xml = ttkb.Button(f_botoes_acao, text="📄 IMPORTAR XML", style="Ciano.TButton", cursor="hand2", command=lambda: importar_xml_nfe())
-    btn_xml.pack(side="left", padx=5)
-    ToolTip(btn_xml, text="Importar XML de NF-e e preencher automaticamente (Ctrl+I)")
+    btn_xml = ttkb.Button(f_botoes_acao, text="📄 XML", style="Ciano.TButton", cursor="hand2", command=lambda: importar_xml_nfe())
+    btn_xml.pack(side="left", padx=3)
+    ToolTip(btn_xml, text="Importar XML de NF-e (Ctrl+I)")
 
-    btn_buscar = ttkb.Button(f_botoes_acao, text="🔍 PESQUISAR PROCESSO", style="Azul.TButton", command=pesquisar_carga_salva)
-    btn_buscar.pack(side="left", padx=5)
-    ToolTip(btn_buscar, text="Pesquisar por Nota, Pedido ou Fornecedor (Atalho: Ctrl + F)")
-    
-    btn_salvar_reimprimir = ttkb.Button(f_botoes_acao, text="💾 SALVAR E REIMPRIMIR", style="VerdeSalvar.TButton", command=reimprimir_processo)
-    btn_salvar_reimprimir.pack(side="left", padx=5)
-    ToolTip(btn_salvar_reimprimir, text="Salva os preços editados no arquivo original e reabre o espelho")
+    btn_buscar = ttkb.Button(f_botoes_acao, text="🔍 BUSCAR", style="Azul.TButton", command=pesquisar_carga_salva)
+    btn_buscar.pack(side="left", padx=3)
+    ToolTip(btn_buscar, text="Pesquisar processo (Ctrl+F)")
 
-    btn_ex = ttkb.Button(f_botoes_acao, text="🔐 AUDITAR E FECHAR CARGA", style="VermelhoClaro.TButton", command=abrir_cofre_auditoria)
-    btn_ex.pack(side="left", padx=10)
-    ToolTip(btn_ex, text="Auditar e fechar carga (Atalho: Ctrl + S)")
+    btn_salvar_reimprimir = ttkb.Button(f_botoes_acao, text="💾 REIMPRIMIR", style="VerdeSalvar.TButton", command=reimprimir_processo)
+    btn_salvar_reimprimir.pack(side="left", padx=3)
+    ToolTip(btn_salvar_reimprimir, text="Salvar preços e reimprimir espelho")
 
-    btn_fretes = ttkb.Button(f_botoes_acao, text="🚚 EDITAR FRETES", style="Marrom.TButton", command=lambda: abrir_modulo_fretes(root, pasta_fretes))
-    btn_fretes.pack(side="left", padx=10)
+    btn_ex = ttkb.Button(f_botoes_acao, text="🔐 AUDITAR", style="VermelhoClaro.TButton", command=abrir_cofre_auditoria)
+    btn_ex.pack(side="left", padx=3)
+    ToolTip(btn_ex, text="Auditar e fechar carga (Ctrl+S)")
+
+    btn_fretes = ttkb.Button(f_botoes_acao, text="🚚 FRETES", style="Marrom.TButton", command=lambda: abrir_modulo_fretes(root, pasta_fretes))
+    btn_fretes.pack(side="left", padx=3)
 
     # Lado direito: FDC status + botão ATUALIZAR FDC
     btn_atualizar_fdc = ttkb.Button(f_controle, text="🔄 ATUALIZAR FDC",
@@ -2774,14 +2818,18 @@ def criar_tela():
             btn_pendencias.pack_forget()
 
     # Inicialização: carrega FDC, atualiza label, avisa se desatualizado
+    def _pasta_fdc_efetiva():
+        return _ler_pasta_fdc() or diretorio_atual
+
     def verificar_db_startup():
-        sucesso, msg, is_outdated = carregar_dados_memoria(diretorio_atual)
-        brutos = tem_brutos_novos(diretorio_atual) if sucesso else False
+        pasta = _pasta_fdc_efetiva()
+        sucesso, msg, is_outdated = carregar_dados_memoria(pasta)
+        brutos = tem_brutos_novos(pasta) if sucesso else False
         _atualizar_lbl_fdc(sucesso, msg, is_outdated, brutos)
         if is_outdated:
             messagebox.showwarning("FDC Desatualizado",
                 f"Os relatórios do FDC estão com mais de 24h!\n\n{msg}\n\n"
-                "Clique em 'ATUALIZAR FDC' para processar os novos CSVs.")
+                "Clique em '🔄 ATUALIZAR FDC' para processar os novos CSVs.")
         elif brutos:
             messagebox.showinfo("CSVs FDC pendentes",
                 "Há arquivos CSV do FDC aguardando processamento.\n"
@@ -2793,8 +2841,9 @@ def criar_tela():
     # Verificação periódica silenciosa a cada 30 minutos
     def _verificar_fdc_periodicamente():
         try:
-            s, msg, out = carregar_dados_memoria(diretorio_atual)
-            brutos = tem_brutos_novos(diretorio_atual) if s else False
+            pasta = _pasta_fdc_efetiva()
+            s, msg, out = carregar_dados_memoria(pasta)
+            brutos = tem_brutos_novos(pasta) if s else False
             _atualizar_lbl_fdc(s, msg, out, brutos)
         except Exception:
             pass

@@ -23,6 +23,16 @@ def eh_produto_basico(caminho: str) -> bool:
     return "produto" in nome and ("basico" in nome or "básico" in nome)
 
 
+def eh_posicao_financeira(caminho: str) -> bool:
+    nome = _normalizar(os.path.basename(caminho))
+    return ("posicao" in nome or "financiera" in nome or "financeira" in nome) and not eh_produto_basico(caminho)
+
+
+def _csvs_relevantes(pasta: str):
+    todos = sorted(glob.glob(os.path.join(pasta, "*.csv")))
+    return [f for f in todos if eh_produto_basico(f) or eh_posicao_financeira(f)]
+
+
 def trocar_pontos_virgulas(df: pd.DataFrame) -> pd.DataFrame:
     for col in df.columns:
         df[col] = df[col].apply(
@@ -71,18 +81,19 @@ def processar_posicao(caminho: str, log_fn) -> pd.DataFrame:
 
 
 def executar(pasta, log_fn, on_done):
-    todos_csvs = sorted(glob.glob(os.path.join(pasta, "*.csv")))
+    todos_csvs = _csvs_relevantes(pasta)
 
     if not todos_csvs:
-        log_fn("[ERRO] Nenhum arquivo .csv encontrado nesta pasta.")
+        log_fn("[ERRO] Nenhum arquivo CSV reconhecido nesta pasta.")
+        log_fn("Esperado: 'Relatorio de Produto Basico*.csv' e 'relatorio-posicao-financiera*.csv'")
         on_done(False)
         return
 
     basico_csvs  = [f for f in todos_csvs if eh_produto_basico(f)]
-    posicao_csvs = [f for f in todos_csvs if not eh_produto_basico(f)
+    posicao_csvs = [f for f in todos_csvs if eh_posicao_financeira(f)
                     and os.path.basename(f).lower() != ARQUIVO_SAIDA_POSICAO.lower()]
 
-    log_fn(f"{len(todos_csvs)} arquivo(s) CSV encontrado(s):")
+    log_fn(f"{len(todos_csvs)} arquivo(s) reconhecido(s):")
     for f in todos_csvs:
         tipo = "Produto Basico" if eh_produto_basico(f) else "Posicao Financeira"
         log_fn(f"  [{tipo}] {os.path.basename(f)}")
@@ -153,7 +164,7 @@ def executar(pasta, log_fn, on_done):
 def tem_brutos_novos(pasta: str) -> bool:
     csvs = glob.glob(os.path.join(pasta, "*.csv"))
     return any(
-        not eh_produto_basico(f) and
+        eh_posicao_financeira(f) and
         os.path.basename(f).lower() != ARQUIVO_SAIDA_POSICAO.lower()
         for f in csvs
     )
