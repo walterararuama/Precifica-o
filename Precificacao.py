@@ -65,6 +65,45 @@ pasta_arquivo = ""
 pasta_fretes  = ""
 _aplicar_pasta_base(_ler_pasta_base())
 
+def _ler_grupo_whatsapp():
+    cfg = configparser.ConfigParser()
+    if os.path.exists(_CONFIG_LOCAL_INI):
+        cfg.read(_CONFIG_LOCAL_INI, encoding='utf-8')
+    return cfg.get("whatsapp", "grupo", fallback=None)
+
+def _salvar_grupo_whatsapp(nome):
+    cfg = configparser.ConfigParser()
+    if os.path.exists(_CONFIG_LOCAL_INI):
+        cfg.read(_CONFIG_LOCAL_INI, encoding='utf-8')
+    if "whatsapp" not in cfg:
+        cfg["whatsapp"] = {}
+    cfg["whatsapp"]["grupo"] = nome
+    os.makedirs(_CONFIG_LOCAL_DIR, exist_ok=True)
+    with open(_CONFIG_LOCAL_INI, "w", encoding="utf-8") as _f:
+        cfg.write(_f)
+
+def _enviar_whatsapp_desktop(grupo):
+    import subprocess as _sp, time as _t
+    import pyautogui as _ag, pygetwindow as _gw
+    _ag.FAILSAFE = False
+    _sp.run(["cmd", "/c", "start", "whatsapp://"], shell=True)
+    for _ in range(16):
+        _t.sleep(0.5)
+        wins = _gw.getWindowsWithTitle("WhatsApp")
+        if wins:
+            wins[0].activate()
+            break
+    _t.sleep(1.0)
+    _ag.press('escape');     _t.sleep(0.2)
+    _ag.press('escape');     _t.sleep(0.2)
+    _ag.hotkey('ctrl','f');  _t.sleep(0.4)
+    _ag.hotkey('ctrl','a');  _ag.write(grupo, interval=0.04)
+    _t.sleep(1.5)
+    _ag.press('down');       _t.sleep(0.3)
+    _ag.press('enter');      _t.sleep(0.6)
+    _ag.hotkey('ctrl','v');  _t.sleep(0.8)
+    _ag.press('enter')
+
 # =====================================================================
 # SPLASH SCREEN — aparece antes dos imports pesados
 # =====================================================================
@@ -2049,9 +2088,18 @@ def criar_tela():
                 try:
                     img = _gerar_imagem_lojas()
                     _copiar_imagem_clipboard(img)
-                    messagebox.showinfo("Copiado!", "Imagem de aviso para as lojas copiada!\nCola com Ctrl+V no WhatsApp.")
+                    grupo = _ler_grupo_whatsapp()
+                    if not grupo:
+                        from tkinter import simpledialog as _sd
+                        grupo = _sd.askstring("WhatsApp", "Nome exato do grupo para enviar o aviso:", parent=root)
+                        if not grupo:
+                            return
+                        _salvar_grupo_whatsapp(grupo.strip())
+                        grupo = grupo.strip()
+                    _enviar_whatsapp_desktop(grupo)
+                    messagebox.showinfo("Enviado!", f"Aviso enviado para o grupo '{grupo}'.")
                 except Exception as _ex:
-                    messagebox.showerror("Erro", f"Nao foi possivel gerar a imagem:\n{_ex}")
+                    messagebox.showerror("Erro", f"Nao foi possivel enviar o aviso:\n{_ex}")
 
             def executar_exportacao():
                 root.status_pagamento = var_pag.get()
