@@ -2351,16 +2351,25 @@ def criar_tela():
         root.ignorando_validacao = True
         limpar_nota(pergunta=False, add_linha=False)
 
-        # Fornecedor: busca por nome (fuzzy) ou CNPJ
+        # Fornecedor: busca por CNPJ (prioridade) ou fuzzy por nome
+        cnpj_xml  = re.sub(r'\D', '', dados_xml.get('cnpj_fornecedor', ''))
         nome_emit = dados_xml.get('nome_fornecedor', '')
         nomes_forn = list(combo_forn.master_list) if hasattr(combo_forn, 'master_list') else []
         encontrado = ''
-        if nomes_forn and nome_emit:
+
+        if cnpj_xml:
+            for f in cache_fornecedores:
+                if re.sub(r'\D', '', str(f.get('cnpj', ''))) == cnpj_xml:
+                    encontrado = f['fabricante']
+                    break
+
+        if not encontrado and nomes_forn and nome_emit:
             matches = difflib.get_close_matches(nome_emit.upper(),
                                                 [n.upper() for n in nomes_forn], n=1, cutoff=0.4)
             if matches:
                 idx = [n.upper() for n in nomes_forn].index(matches[0])
                 encontrado = nomes_forn[idx]
+
         if encontrado:
             combo_forn.set(encontrado)
         else:
