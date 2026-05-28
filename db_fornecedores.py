@@ -23,6 +23,20 @@ def inicializar_banco_fornecedores(db_path, diretorio_atual):
         ''')
         try: cursor.execute("ALTER TABLE fornecedores ADD COLUMN uf TEXT DEFAULT ''")
         except sqlite3.OperationalError: pass
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS de_para_produtos (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                cnpj_fornecedor TEXT,
+                codigo_nf       TEXT,
+                descricao_nf    TEXT,
+                codigo_fdc      TEXT,
+                nome_fdc        TEXT,
+                confirmado_por  TEXT,
+                data_criacao    TEXT,
+                total_usos      INTEGER DEFAULT 0
+            )
+        """)
             
         cursor.execute("SELECT COUNT(*) FROM fornecedores")
         if cursor.fetchone()[0] == 0:
@@ -185,3 +199,62 @@ def abrir_gerenciador_fornecedores(root, combo_forn, db_path):
     entradas["markup"].bind("<Return>", salvar_fornecedor)
 
     carregar_dados()
+
+
+def abrir_gerenciador_de_para(root, db_path):
+    from importador_xml import listar_de_para, deletar_de_para
+    from tkinter import ttk
+
+    janela = tk.Toplevel(root)
+    janela.title("Gerenciador de De-Para de Produtos (XML)")
+    w, h = 1100, 500
+    janela.geometry(f"{w}x{h}+{(janela.winfo_screenwidth()-w)//2}+{(janela.winfo_screenheight()-h)//2}")
+    janela.transient(root); janela.grab_set()
+
+    bg = getattr(root, 'tema_atual', 'claro')
+    bg_cor = "#ecf0f1" if bg == 'claro' else "#2e3440"
+    janela.config(bg=bg_cor)
+
+    f_lista = ttkb.Labelframe(janela, text=" Mapeamentos Salvos (De-Para) ", padding=10)
+    f_lista.pack(fill="both", expand=True, padx=10, pady=8)
+
+    colunas = ("id", "CNPJ Fornecedor", "Cód NF", "Descrição NF", "Cód FDC", "Nome FDC", "Usos", "Data")
+    tree = ttk.Treeview(f_lista, columns=colunas, show="headings", selectmode="browse")
+
+    sb_y = ttkb.Scrollbar(f_lista, orient="vertical", command=tree.yview)
+    sb_x = ttkb.Scrollbar(f_lista, orient="horizontal", command=tree.xview)
+    tree.configure(yscrollcommand=sb_y.set, xscrollcommand=sb_x.set)
+    sb_y.pack(side="right", fill="y"); sb_x.pack(side="bottom", fill="x")
+    tree.pack(fill="both", expand=True)
+
+    larguras = {"id": 0, "CNPJ Fornecedor": 130, "Cód NF": 90, "Descrição NF": 280,
+                "Cód FDC": 80, "Nome FDC": 220, "Usos": 50, "Data": 110}
+    for col in colunas:
+        tree.heading(col, text=col)
+        tree.column(col, width=larguras.get(col, 100),
+                    anchor="w" if col in ("Descrição NF", "Nome FDC") else "center",
+                    stretch=(col != "id"), minwidth=0 if col == "id" else 30)
+    tree.column("id", width=0, minwidth=0, stretch=False)
+
+    def carregar():
+        for row in tree.get_children(): tree.delete(row)
+        for dp in listar_de_para(db_path):
+            tree.insert("", "end", iid=str(dp['id']), values=(
+                dp['id'], dp['cnpj_fornecedor'], dp['codigo_nf'], dp['descricao_nf'],
+                dp['codigo_fdc'], dp['nome_fdc'], dp['total_usos'], dp['data_criacao']
+            ))
+
+    def excluir():
+        sel = tree.selection()
+        if not sel: return
+        if messagebox.askyesno("Confirmar", "Excluir o mapeamento selecionado?", parent=janela):
+            deletar_de_para(db_path, int(sel[0]))
+            carregar()
+
+    f_bot = tk.Frame(janela, bg=bg_cor)
+    f_bot.pack(pady=8)
+    ttkb.Button(f_bot, text="🗑️ Excluir Selecionado", bootstyle="danger", command=excluir).pack(side="left", padx=8)
+    ttkb.Button(f_bot, text="🔄 Atualizar", bootstyle="info", command=carregar).pack(side="left", padx=8)
+    ttkb.Button(f_bot, text="🔙 Fechar", bootstyle="warning", command=janela.destroy).pack(side="left", padx=8)
+
+    carregar()

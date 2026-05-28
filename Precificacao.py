@@ -219,6 +219,7 @@ _splash_set(3, "Iniciando...")
 # --- IMPORTS PESADOS — progresso real a cada etapa ---
 _splash_set(8,  "Carregando pandas e módulos base...")
 import re
+import difflib
 import pandas as pd
 
 _splash_set(30, "Inicializando interface gráfica...")
@@ -249,7 +250,8 @@ _splash_set(75, "Carregando módulo de exportação...")
 from exportacao import processar_exportacao_carga, salvar_edicao_precos
 
 _splash_set(82, "Carregando banco de fornecedores...")
-from db_fornecedores import inicializar_banco_fornecedores, carregar_fornecedores_db, get_lista_nomes_fornecedores, abrir_gerenciador_fornecedores
+from db_fornecedores import inicializar_banco_fornecedores, carregar_fornecedores_db, get_lista_nomes_fornecedores, abrir_gerenciador_fornecedores, abrir_gerenciador_de_para
+from importador_xml import ler_xml_nfe, cruzar_produtos, salvar_de_para
 
 _splash_set(88, "Carregando utilitários de cálculo...")
 from utils import converter_moeda, formatar_moeda, formatar_percentual, auto_selecionar, arredondar_preco, check_nota_duplicada
@@ -402,6 +404,7 @@ def criar_tela():
         ("VermelhoClaro",  "#FF6B6B", "#E74C3C"),
         ("Marrom",         "#5D4037", "#4E342E"),
         ("VermelhoEscuro", "#8B0000", "#6B0000"),
+        ("Ciano",          "#17A589", "#148F77"),
     ]:
         style.configure(f"{_nome}.TButton", background=_bg, foreground="white",
                         font=("Segoe UI", 10, "bold"), borderwidth=0, padding=6)
@@ -677,6 +680,7 @@ def criar_tela():
     combo_forn.bind('<Return>', lambda e: [close_listbox_forn(), pular_foco(ent_pedido)])
 
     tk.Button(f_forn, text="⚙️ Gerenciar", bg="#f39c12", fg="white", font=("Segoe UI", 9, "bold"), relief=tk.FLAT, cursor="hand2", command=lambda: abrir_gerenciador_fornecedores(root, combo_forn, DB_PATH)).pack(side="left", padx=10)
+    tk.Button(f_forn, text="🔗 De-Para", bg="#17A589", fg="white", font=("Segoe UI", 9, "bold"), relief=tk.FLAT, cursor="hand2", command=lambda: abrir_gerenciador_de_para(root, DB_PATH)).pack(side="left", padx=2)
 
     f_pedido = ttkb.Frame(f_header, bootstyle="primary"); f_pedido.pack(side="left", padx=15)
     ttkb.Label(f_pedido, text="PEDIDO FDC:", font=("Segoe UI", 10, "bold"), bootstyle="inverse-primary").pack(side="left", padx=5)
@@ -2339,6 +2343,279 @@ def criar_tela():
     lbl_res_formula.pack(side="left", expand=True, pady=2)
 
     # =========================================================
+    # IMPORTAÇÃO DE XML NF-e
+    # =========================================================
+
+    def _preencher_tela_xml(dados_xml, itens):
+        from tkinter import filedialog as _fd
+        root.ignorando_validacao = True
+        limpar_nota(pergunta=False, add_linha=False)
+
+        # Fornecedor: busca por nome (fuzzy) ou CNPJ
+        nome_emit = dados_xml.get('nome_fornecedor', '')
+        nomes_forn = list(combo_forn.master_list) if hasattr(combo_forn, 'master_list') else []
+        encontrado = ''
+        if nomes_forn and nome_emit:
+            matches = difflib.get_close_matches(nome_emit.upper(),
+                                                [n.upper() for n in nomes_forn], n=1, cutoff=0.4)
+            if matches:
+                idx = [n.upper() for n in nomes_forn].index(matches[0])
+                encontrado = nomes_forn[idx]
+        if encontrado:
+            combo_forn.set(encontrado)
+        else:
+            combo_forn.set(nome_emit)
+        ao_trocar_fornecedor()
+
+        var_num_nota.set(dados_xml.get('num_nf', ''))
+        var_dt_emissao.set(dados_xml.get('dt_emissao', ''))
+        frete_xml = dados_xml.get('mod_frete', '')
+        if frete_xml in ('CIF', 'FOB', 'TERCEIRIZADO'):
+            var_tipo_frete.set(frete_xml)
+
+        for item in itens:
+            adicionar_linha()
+            r = linhas_nota[-1]
+            cod_fdc = item.get('cod_fdc_sugerido') or ''
+            r['var_cod'].set(cod_fdc)
+            if cod_fdc:
+                buscar_produto(r)
+            qtd = item.get('qtd', 0)
+            r['var_qtd_nf'].set(str(int(qtd)) if float(qtd) == int(qtd) else str(qtd))
+            r['var_unit_nf'].set(formatar_moeda(item.get('val_unit', 0.0)))
+            ipi = item.get('ipi_perc', 0.0)
+            if ipi > 0:
+                r['var_ipi'].set(formatar_percentual(ipi))
+
+        root.ignorando_validacao = False
+        atualizar_tudo_real_time()
+        if not encontrado and nome_emit:
+            messagebox.showinfo("Fornecedor não encontrado",
+                f"Fornecedor '{nome_emit}' não está cadastrado.\nSelecione manualmente no campo Fornecedor.")
+
+    def abrir_janela_resolucao_xml(dados_xml, itens_cruzados):
+        from tkinter import ttk
+        import difflib as _diff
+
+        jan = tk.Toplevel(root)
+        jan.title("Importar XML — Resolução de Produtos")
+        sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+        w, h = int(sw * 0.92), int(sh * 0.82)
+        jan.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
+        jan.transient(root); jan.grab_set()
+        bg_mod = "#ecf0f1" if root.tema_atual == 'claro' else "#2e3440"
+        fg_mod = "black" if root.tema_atual == 'claro' else "white"
+        jan.config(bg=bg_mod)
+
+        # Cabeçalho informativo
+        f_cab = ttkb.Frame(jan, bootstyle="secondary", padding=10)
+        f_cab.pack(fill="x", side="top")
+        info_campos = [
+            ("Fornecedor:", dados_xml.get('nome_fornecedor', '')),
+            ("NF Nº:", dados_xml.get('num_nf', '')),
+            ("Emissão:", dados_xml.get('dt_emissao', '')),
+            ("Frete:", dados_xml.get('mod_frete', '')),
+            ("Total NF:", formatar_moeda(dados_xml.get('val_total', 0))),
+        ]
+        for i, (lbl, val) in enumerate(info_campos):
+            ttkb.Label(f_cab, text=lbl, font=("Segoe UI", 9, "bold")).grid(row=0, column=i*2, padx=(15,2), pady=4, sticky="e")
+            ttkb.Label(f_cab, text=val, font=("Segoe UI", 9)).grid(row=0, column=i*2+1, padx=(0,15), pady=4, sticky="w")
+
+        # Treeview de produtos
+        f_tree = ttkb.Frame(jan, padding=5)
+        f_tree.pack(fill="both", expand=True, padx=8, pady=4)
+
+        colunas = ("Cód NF", "Descrição NF", "Qtd", "Val Unit", "IPI%", "Status", "Cód FDC", "Nome FDC")
+        tree = ttk.Treeview(f_tree, columns=colunas, show="headings", selectmode="browse")
+        sb_y = ttkb.Scrollbar(f_tree, orient="vertical", command=tree.yview)
+        sb_x = ttkb.Scrollbar(f_tree, orient="horizontal", command=tree.xview)
+        tree.configure(yscrollcommand=sb_y.set, xscrollcommand=sb_x.set)
+        sb_y.pack(side="right", fill="y"); sb_x.pack(side="bottom", fill="x")
+        tree.pack(fill="both", expand=True)
+
+        largs = {"Cód NF": 80, "Descrição NF": 260, "Qtd": 55, "Val Unit": 80,
+                 "IPI%": 55, "Status": 110, "Cód FDC": 75, "Nome FDC": 230}
+        for col in colunas:
+            tree.heading(col, text=col)
+            tree.column(col, width=largs.get(col, 80),
+                        anchor="w" if col in ("Descrição NF", "Nome FDC") else "center")
+
+        tree.tag_configure("CONFIRMADO",    background="#1A5276", foreground="white")
+        tree.tag_configure("EAN_DIRETO",    background="#154360", foreground="white")
+        tree.tag_configure("SUGESTAO",      background="#7D6608", foreground="white")
+        tree.tag_configure("NAO_ENCONTRADO",background="#641E16", foreground="white")
+
+        # estado mutável dos itens (copiado para permitir edição)
+        itens_estado = [dict(i) for i in itens_cruzados]
+
+        def _recarregar_tree():
+            for row in tree.get_children(): tree.delete(row)
+            for idx, item in enumerate(itens_estado):
+                st = item.get('status', 'NAO_ENCONTRADO')
+                tree.insert("", "end", iid=str(idx), tags=(st,), values=(
+                    item.get('cod_nf', ''),
+                    item.get('descricao_nf', ''),
+                    item.get('qtd', ''),
+                    formatar_moeda(item.get('val_unit', 0)),
+                    f"{item.get('ipi_perc',0):.2f}%",
+                    st,
+                    item.get('cod_fdc_sugerido') or '',
+                    item.get('nome_fdc_sugerido') or '',
+                ))
+
+        _recarregar_tree()
+
+        # Dica de uso
+        ttkb.Label(jan, text="Duplo-clique numa linha para resolver manualmente",
+                   font=("Segoe UI", 8, "italic"), bootstyle="secondary").pack()
+
+        def _abrir_selecao(idx):
+            item = itens_estado[idx]
+            sugestoes = item.get('sugestoes', [])
+
+            sel_jan = tk.Toplevel(jan)
+            sel_jan.title("Selecionar Produto FDC")
+            sel_jan.geometry(f"700x420+{(sw-700)//2}+{(sh-420)//2}")
+            sel_jan.transient(jan); sel_jan.grab_set()
+            sel_jan.config(bg=bg_mod)
+
+            ttkb.Label(sel_jan, text=f"Produto NF: {item.get('descricao_nf','')}",
+                       font=("Segoe UI", 10, "bold")).pack(pady=(10,4), padx=10, anchor="w")
+
+            # Sugestões
+            f_sug = ttkb.Labelframe(sel_jan, text=" Sugestões automáticas ", padding=8)
+            f_sug.pack(fill="x", padx=10, pady=4)
+            lb_var = tk.StringVar()
+            lb = tk.Listbox(f_sug, height=5, font=("Segoe UI", 9), activestyle="dotbox",
+                            selectmode="single", listvariable=lb_var)
+            lb.pack(fill="x")
+            sugestoes_lista = []
+            for s in sugestoes:
+                texto = f"[{s['codigo']}]  {s['nome']}  ({s['score']*100:.0f}%)"
+                lb.insert("end", texto)
+                sugestoes_lista.append(s)
+            if sugestoes_lista:
+                lb.selection_set(0)
+
+            # Busca manual por código FDC
+            f_man = ttkb.Labelframe(sel_jan, text=" Ou digitar código FDC manualmente ", padding=8)
+            f_man.pack(fill="x", padx=10, pady=4)
+            ent_cod = ttkb.Entry(f_man, font=("Segoe UI", 10), width=20)
+            ent_cod.pack(side="left", padx=4)
+            lbl_nome_manual = ttkb.Label(f_man, text="", font=("Segoe UI", 9))
+            lbl_nome_manual.pack(side="left", padx=8)
+
+            def _validar_manual(*_):
+                cod = ent_cod.get().strip()
+                df_bas = cache_fdc.get('basico')
+                if df_bas is not None and not df_bas.empty and '_cod_str' in df_bas.columns:
+                    m = df_bas[df_bas['_cod_str'] == cod]
+                    if not m.empty:
+                        lbl_nome_manual.config(text=m.iloc[0]['_nome_str'], foreground="#2ECC71")
+                        return
+                lbl_nome_manual.config(text="Não encontrado" if cod else "", foreground="#E74C3C")
+
+            ent_cod.bind("<KeyRelease>", _validar_manual)
+
+            var_salvar = tk.BooleanVar(value=True)
+            ttkb.Checkbutton(sel_jan, text="Salvar mapeamento para uso futuro",
+                             variable=var_salvar).pack(padx=10, pady=4, anchor="w")
+
+            def _confirmar():
+                cod_escolhido = nome_escolhido = ''
+                cod_manual = ent_cod.get().strip()
+                if cod_manual:
+                    df_bas = cache_fdc.get('basico')
+                    if df_bas is not None and '_cod_str' in df_bas.columns:
+                        m = df_bas[df_bas['_cod_str'] == cod_manual]
+                        if not m.empty:
+                            cod_escolhido  = cod_manual
+                            nome_escolhido = m.iloc[0]['_nome_str']
+                if not cod_escolhido and lb.curselection() and sugestoes_lista:
+                    s = sugestoes_lista[lb.curselection()[0]]
+                    cod_escolhido = s['codigo']; nome_escolhido = s['nome']
+                if not cod_escolhido:
+                    messagebox.showwarning("Atenção", "Selecione ou digite um código FDC.", parent=sel_jan)
+                    return
+                itens_estado[idx]['cod_fdc_sugerido']  = cod_escolhido
+                itens_estado[idx]['nome_fdc_sugerido'] = nome_escolhido
+                itens_estado[idx]['confirmado']        = True
+                itens_estado[idx]['status']            = 'CONFIRMADO'
+                if var_salvar.get():
+                    salvar_de_para(DB_PATH,
+                                   dados_xml.get('cnpj_fornecedor', ''),
+                                   item.get('cod_nf', ''),
+                                   item.get('descricao_nf', ''),
+                                   cod_escolhido, nome_escolhido)
+                _recarregar_tree()
+                sel_jan.destroy()
+
+            f_btns = tk.Frame(sel_jan, bg=bg_mod)
+            f_btns.pack(pady=10)
+            ttkb.Button(f_btns, text="✅ Confirmar", bootstyle="success", command=_confirmar).pack(side="left", padx=8)
+            ttkb.Button(f_btns, text="❌ Cancelar", bootstyle="danger", command=sel_jan.destroy).pack(side="left", padx=8)
+
+        def _duplo_clique(event):
+            iid = tree.identify_row(event.y)
+            if iid:
+                _abrir_selecao(int(iid))
+
+        tree.bind("<Double-1>", _duplo_clique)
+
+        # Botões inferiores
+        f_bots = tk.Frame(jan, bg=bg_mod)
+        f_bots.pack(pady=10)
+
+        def _importar(so_confirmados):
+            if so_confirmados:
+                itens_imp = [i for i in itens_estado if i.get('status') in ('CONFIRMADO', 'EAN_DIRETO')]
+            else:
+                itens_imp = itens_estado
+            if not itens_imp:
+                messagebox.showinfo("Nenhum item", "Nenhum produto para importar.", parent=jan)
+                return
+            jan.destroy()
+            _preencher_tela_xml(dados_xml, itens_imp)
+
+        ttkb.Button(f_bots, text="✅ IMPORTAR CONFIRMADOS",
+                    bootstyle="success", padding=(12,8),
+                    command=lambda: _importar(True)).pack(side="left", padx=8)
+        ttkb.Button(f_bots, text="⚠️ IMPORTAR TODOS COM PENDÊNCIAS",
+                    bootstyle="warning", padding=(12,8),
+                    command=lambda: _importar(False)).pack(side="left", padx=8)
+        ttkb.Button(f_bots, text="❌ CANCELAR",
+                    bootstyle="danger", padding=(12,8),
+                    command=jan.destroy).pack(side="left", padx=8)
+
+    def importar_xml_nfe():
+        from tkinter import filedialog as _fd
+        if not cache_fdc.get('carregado'):
+            messagebox.showwarning("FDC não carregado",
+                "Carregue os dados do FDC antes de importar um XML.")
+            return
+        tem_dados = any(r['var_cod'].get().strip() for r in linhas_nota)
+        if tem_dados:
+            if not messagebox.askyesno("Limpar tela?",
+                "Há produtos na tela. Deseja limpar antes de importar o XML?"):
+                return
+            limpar_nota(pergunta=False, add_linha=False)
+        caminho = _fd.askopenfilename(
+            title="Selecionar XML de NF-e",
+            filetypes=[("XML NF-e", "*.xml"), ("Todos os arquivos", "*.*")])
+        if not caminho:
+            return
+        try:
+            dados_xml = ler_xml_nfe(caminho)
+            if not dados_xml['itens']:
+                messagebox.showwarning("XML vazio", "Nenhum produto encontrado no XML.")
+                return
+            itens_cruzados = cruzar_produtos(dados_xml['itens'], cache_fdc, DB_PATH,
+                                             dados_xml['cnpj_fornecedor'])
+            abrir_janela_resolucao_xml(dados_xml, itens_cruzados)
+        except Exception as ex:
+            messagebox.showerror("Erro ao ler XML", str(ex))
+
+    # =========================================================
     # BARRA DE AÇÕES E ALERTAS (NOVO LAYOUT)
     # =========================================================
     f_controle = ttkb.Frame(root, padding=5)
@@ -2354,7 +2631,11 @@ def criar_tela():
     btn_limpar = ttkb.Button(f_botoes_acao, text="🧹 LIMPAR", style="Vermelho.TButton", command=lambda: limpar_nota(pergunta=True))
     btn_limpar.pack(side="left", padx=5)
     ToolTip(btn_limpar, text="Limpar todos os campos (Atalho: Ctrl + L)")
-    
+
+    btn_xml = ttkb.Button(f_botoes_acao, text="📄 IMPORTAR XML", style="Ciano.TButton", cursor="hand2", command=lambda: importar_xml_nfe())
+    btn_xml.pack(side="left", padx=5)
+    ToolTip(btn_xml, text="Importar XML de NF-e e preencher automaticamente (Ctrl+I)")
+
     btn_buscar = ttkb.Button(f_botoes_acao, text="🔍 PESQUISAR PROCESSO", style="Azul.TButton", command=pesquisar_carga_salva)
     btn_buscar.pack(side="left", padx=5)
     ToolTip(btn_buscar, text="Pesquisar por Nota, Pedido ou Fornecedor (Atalho: Ctrl + F)")
@@ -2403,6 +2684,9 @@ def criar_tela():
     
     root.bind("<Control-f>", lambda e: pesquisar_carga_salva())
     root.bind("<Control-F>", lambda e: pesquisar_carga_salva())
+
+    root.bind("<Control-i>", lambda e: importar_xml_nfe())
+    root.bind("<Control-I>", lambda e: importar_xml_nfe())
 
     root.after(100, lambda: limpar_nota(pergunta=False, add_linha=True))
     if _CONFIG_INI_NOVO or not _banco_acessivel:
