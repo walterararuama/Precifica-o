@@ -257,7 +257,7 @@ _splash_set(88, "Carregando utilitários de cálculo...")
 from utils import converter_moeda, formatar_moeda, formatar_percentual, auto_selecionar, arredondar_preco, check_nota_duplicada
 
 _splash_set(93, "Carregando motor FDC...")
-from motor_fdc import cache_fdc, carregar_dados_memoria
+from motor_fdc import cache_fdc, carregar_dados_memoria, tem_brutos_novos
 
 _splash_set(96, "Configurando logs do sistema...")
 logging.basicConfig(
@@ -405,6 +405,7 @@ def criar_tela():
         ("Marrom",         "#5D4037", "#4E342E"),
         ("VermelhoEscuro", "#8B0000", "#6B0000"),
         ("Ciano",          "#17A589", "#148F77"),
+        ("Laranja",        "#E67E22", "#CA6F1E"),
     ]:
         style.configure(f"{_nome}.TButton", background=_bg, foreground="white",
                         font=("Segoe UI", 10, "bold"), borderwidth=0, padding=6)
@@ -2625,6 +2626,76 @@ def criar_tela():
             messagebox.showerror("Erro ao ler XML", str(ex))
 
     # =========================================================
+    # JANELA ATUALIZAR FDC (processa CSVs brutos)
+    # =========================================================
+    def abrir_janela_atualizar_fdc():
+        from tkinter import scrolledtext as _st
+        from preparador_fdc import executar as _exec
+        import threading as _thr
+
+        jan = tk.Toplevel(root)
+        jan.title("Atualizar FDC — Processamento de CSVs")
+        sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+        w, h = 660, 480
+        jan.geometry(f"{w}x{h}+{(sw-w)//2}+{(sh-h)//2}")
+        jan.transient(root); jan.grab_set(); jan.resizable(False, False)
+        jan.config(bg="#1E1E1E")
+
+        tk.Label(jan, text="PROCESSAMENTO DE RELATÓRIOS FDC",
+                 font=("Segoe UI", 12, "bold"), bg="#1E1E1E", fg="#D4D4D4", pady=8).pack()
+        tk.Label(jan, text=f"Pasta: {diretorio_atual}",
+                 font=("Segoe UI", 8), bg="#1E1E1E", fg="#888888", wraplength=640).pack()
+
+        log_area = _st.ScrolledText(jan, height=18, width=80,
+                                    font=("Consolas", 9), state="disabled",
+                                    bg="#1E1E1E", fg="#D4D4D4", insertbackground="white",
+                                    relief="flat")
+        log_area.pack(padx=10, pady=6, fill="both", expand=True)
+
+        f_bots = tk.Frame(jan, bg="#1E1E1E")
+        f_bots.pack(pady=8)
+        btn_proc = tk.Button(f_bots, text="▶  Processar CSVs",
+                             font=("Segoe UI", 10, "bold"), bg="#0078D4", fg="white",
+                             padx=20, pady=6, relief="flat", cursor="hand2",
+                             activebackground="#005A9E")
+        btn_proc.pack(side="left", padx=8)
+        btn_fechar = tk.Button(f_bots, text="Fechar",
+                               font=("Segoe UI", 10), bg="#444444", fg="white",
+                               padx=16, pady=6, relief="flat", cursor="hand2",
+                               command=jan.destroy)
+        btn_fechar.pack(side="left", padx=8)
+
+        def log_fn(msg):
+            def _u():
+                log_area.config(state="normal")
+                log_area.insert(tk.END, msg + "\n")
+                log_area.see(tk.END)
+                log_area.config(state="disabled")
+            root.after(0, _u)
+
+        def on_done(success):
+            def _u():
+                if success:
+                    s, msg, out = carregar_dados_memoria(diretorio_atual)
+                    _atualizar_lbl_fdc(s, msg, out, False)
+                    btn_proc.config(state="disabled", text="✅ Concluído", bg="#107C10")
+                    btn_fechar.config(bg="#107C10")
+                else:
+                    btn_proc.config(state="normal", text="↺ Tentar novamente", bg="#C50F1F")
+                    btn_fechar.config(bg="#C50F1F")
+            root.after(0, _u)
+
+        def iniciar():
+            btn_proc.config(state="disabled", text="⏳ Processando...", bg="#555555")
+            log_area.config(state="normal"); log_area.delete("1.0", tk.END); log_area.config(state="disabled")
+            from datetime import datetime as _dt
+            log_fn(f"Iniciado: {_dt.now().strftime('%d/%m/%Y  %H:%M:%S')}")
+            log_fn(f"Pasta: {diretorio_atual}\n")
+            _thr.Thread(target=_exec, args=(diretorio_atual, log_fn, on_done), daemon=True).start()
+
+        btn_proc.config(command=iniciar)
+
+    # =========================================================
     # BARRA DE AÇÕES E ALERTAS (NOVO LAYOUT)
     # =========================================================
     f_controle = ttkb.Frame(root, padding=5)
@@ -2660,26 +2731,77 @@ def criar_tela():
     btn_fretes = ttkb.Button(f_botoes_acao, text="🚚 EDITAR FRETES", style="Marrom.TButton", command=lambda: abrir_modulo_fretes(root, pasta_fretes))
     btn_fretes.pack(side="left", padx=10)
 
-    # Botão de pendências vai para a direita para não embolar
+    # Lado direito: FDC status + botão ATUALIZAR FDC
+    btn_atualizar_fdc = ttkb.Button(f_controle, text="🔄 ATUALIZAR FDC",
+                                    style="VerdeClaro.TButton", cursor="hand2",
+                                    command=abrir_janela_atualizar_fdc)
+    btn_atualizar_fdc.pack(side="right", padx=(0, 4))
+    ToolTip(btn_atualizar_fdc, text="Processar CSVs brutos do FDC e recarregar dados")
+
+    lbl_fdc = tk.Label(f_controle, text="⚪ FDC não carregado",
+                       font=("Segoe UI", 8), fg="#888888",
+                       bg=root.style.colors.bg if hasattr(root, 'style') else "white",
+                       cursor="arrow")
+    lbl_fdc.pack(side="right", padx=(0, 12))
+
+    def _atualizar_lbl_fdc(sucesso, msg, is_outdated, brutos=False):
+        if not sucesso:
+            lbl_fdc.config(text="⚪ FDC não carregado", fg="#888888")
+            btn_atualizar_fdc.config(style="Vermelho.TButton")
+            return
+        if is_outdated or brutos:
+            aviso = "⚠️ FDC desatualizado" if is_outdated else "⚠️ CSVs brutos pendentes"
+            lbl_fdc.config(text=aviso, fg="#E67E22")
+            btn_atualizar_fdc.config(style="Laranja.TButton")
+        else:
+            # extrai "DD/MM HH:MM" da mensagem de status
+            try:
+                bas_info = msg.split("Básica:")[-1].split("|")[0].strip()[:11]
+            except Exception:
+                bas_info = ""
+            lbl_fdc.config(text=f"🟢 FDC: {bas_info}", fg="#2ECC71")
+            btn_atualizar_fdc.config(style="VerdeClaro.TButton")
+
+    # Botão de pendências vai para a direita (mais à esquerda que FDC)
     btn_pendencias = ttkb.Button(f_controle, text="", style="VermelhoEscuro.TButton", command=lambda: mostrar_pendencias())
 
     def atualizar_alerta_pendencias():
         pendentes = glob.glob(os.path.join(pasta_arquivo, "*_PENDENTE.xlsx"))
-        if pendentes: 
+        if pendentes:
             btn_pendencias.config(text=f"⚠️ {len(pendentes)} PEDIDO(S) PENDENTE(S)")
-            btn_pendencias.pack(side="right", padx=20) 
-        else: 
+            btn_pendencias.pack(side="right", padx=20)
+        else:
             btn_pendencias.pack_forget()
 
-    # Aviso inteligente APENAS na inicialização
+    # Inicialização: carrega FDC, atualiza label, avisa se desatualizado
     def verificar_db_startup():
         sucesso, msg, is_outdated = carregar_dados_memoria(diretorio_atual)
+        brutos = tem_brutos_novos(diretorio_atual) if sucesso else False
+        _atualizar_lbl_fdc(sucesso, msg, is_outdated, brutos)
         if is_outdated:
-            # Pula na tela apenas se o arquivo tiver mais de 24h
-            messagebox.showwarning("Aviso de Banco Desatualizado", f"Atenção: Os relatórios do FDC estão com atraso de mais de 24 horas!\n\n{msg}\n\nLembre-se de gerar relatórios novos para garantir que os preços e estoques estejam corretos.")
+            messagebox.showwarning("FDC Desatualizado",
+                f"Os relatórios do FDC estão com mais de 24h!\n\n{msg}\n\n"
+                "Clique em 'ATUALIZAR FDC' para processar os novos CSVs.")
+        elif brutos:
+            messagebox.showinfo("CSVs FDC pendentes",
+                "Há arquivos CSV do FDC aguardando processamento.\n"
+                "Clique em '🔄 ATUALIZAR FDC' para processar.")
         atualizar_alerta_pendencias()
-            
+
     root.after(500, verificar_db_startup)
+
+    # Verificação periódica silenciosa a cada 30 minutos
+    def _verificar_fdc_periodicamente():
+        try:
+            s, msg, out = carregar_dados_memoria(diretorio_atual)
+            brutos = tem_brutos_novos(diretorio_atual) if s else False
+            _atualizar_lbl_fdc(s, msg, out, brutos)
+        except Exception:
+            pass
+        root.after(1800000, _verificar_fdc_periodicamente)
+
+    root.after(1800000, _verificar_fdc_periodicamente)
+    root.bind("<FocusIn>", lambda e: _verificar_fdc_periodicamente() if e.widget is root else None)
 
     # === ATALHOS GLOBAIS DE TECLADO ===
     root.bind("<Control-n>", lambda e: pular_foco(ent_nota))

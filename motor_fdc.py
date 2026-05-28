@@ -52,3 +52,11 @@ def carregar_dados_memoria(diretorio_atual):
     
     msg_status = f"⚠️ ALERTA (> 24h) | Básica: {dt_bas} | Posição: {dt_pos}" if is_outdated else f"🟢 Atualizado | Básica: {dt_bas} | Posição: {dt_pos}"
     return True, msg_status, is_outdated
+
+
+def tem_brutos_novos(pasta):
+    try:
+        from preparador_fdc import tem_brutos_novos as _tbp
+        return _tbp(pasta)
+    except Exception:
+        return False
