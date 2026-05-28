@@ -696,11 +696,11 @@ def criar_tela():
         if root.tema_atual == "claro":
             root.tema_atual = "escuro"
             root.style.theme_use('darkly')
-            btn_tema.config(text="☀️ Modo Dia", bg="#f39c12", fg="black")
+            btn_tema.config(text="☀️", bg="#f39c12", fg="black")
         else:
             root.tema_atual = "claro"
             root.style.theme_use('litera')
-            btn_tema.config(text="🌙 Modo Noite", bg="#2c3e50", fg="white")
+            btn_tema.config(text="🌙", bg="#2c3e50", fg="white")
         atualizar_estilos()
         
         bg_canvas = "#21252e" if root.tema_atual == 'escuro' else "white"
@@ -748,7 +748,7 @@ def criar_tela():
         _inicializar_marca_dagua()
 
     tk.Button(f_header, text="✖ Sair", bg="#FF0000", activebackground="#CC0000", activeforeground="white", fg="white", font=("Segoe UI", 10, "bold"), relief=tk.FLAT, cursor="hand2", padx=15, pady=5, command=sair_seguro).pack(side="right")
-    btn_tema = tk.Button(f_header, text="🌙 Modo Noite", bg="#2c3e50", fg="white", font=("Segoe UI", 9, "bold"), relief=tk.FLAT, cursor="hand2", padx=10, command=alternar_tema)
+    btn_tema = tk.Button(f_header, text="🌙", bg="#2c3e50", fg="white", font=("Segoe UI", 12), relief=tk.FLAT, cursor="hand2", padx=8, command=alternar_tema)
     btn_tema.pack(side="right", padx=10)
     tk.Button(f_header, text="⚙️ Banco", bg="#2980b9", activebackground="#1a6090", fg="white", font=("Segoe UI", 9, "bold"), relief=tk.FLAT, cursor="hand2", padx=10, command=abrir_config_banco).pack(side="right", padx=5)
 
