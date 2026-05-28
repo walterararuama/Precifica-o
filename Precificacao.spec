@@ -5,7 +5,7 @@ a = Analysis(
     ['Precificacao.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('voga.png', '.'), ('Bruno.png', '.'), ('icone.ico', '.')],
     hiddenimports=['pyautogui', 'pygetwindow', 'pyscreeze', 'pymsgbox', 'mouseinfo', 'pyrect', 'pytweening'],
     hookspath=[],
     hooksconfig={},
