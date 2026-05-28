@@ -19,34 +19,36 @@ else:
 
 _CONFIG_INI_NOVO = False
 
+# Config local por máquina/usuário — nunca na pasta de rede
+_CONFIG_LOCAL_DIR = os.path.join(os.environ.get("LOCALAPPDATA", diretorio_atual), "Precificacao")
+_CONFIG_LOCAL_INI = os.path.join(_CONFIG_LOCAL_DIR, "config.ini")
+
 def _ler_pasta_base():
-    """Le a pasta base de trabalho do config.ini.
+    """Le a pasta base de trabalho do config.ini local (AppData do usuário).
     Tudo fica dentro dela: fornecedores.db, ARQUIVO, FRETES.
-    O config.ini fica local (pasta do .exe) em cada maquina."""
+    O config.ini fica em %LOCALAPPDATA%\\Precificacao\\ em cada maquina."""
     global _CONFIG_INI_NOVO
     _cfg = configparser.ConfigParser()
-    _ini = os.path.join(diretorio_atual, "config.ini")
-    if os.path.exists(_ini):
-        _cfg.read(_ini, encoding='utf-8')
+    if os.path.exists(_CONFIG_LOCAL_INI):
+        _cfg.read(_CONFIG_LOCAL_INI, encoding='utf-8')
         # suporta chave nova 'pasta' e chave antiga 'caminho' (compatibilidade)
         pasta = _cfg.get("banco", "pasta", fallback=None)
         if not pasta:
             caminho_antigo = _cfg.get("banco", "caminho", fallback=None)
-            pasta = os.path.dirname(caminho_antigo) if caminho_antigo else diretorio_atual
+            pasta = os.path.dirname(caminho_antigo) if caminho_antigo else None
         return pasta
     else:
         _CONFIG_INI_NOVO = True
-        _cfg["banco"] = {"pasta": diretorio_atual}
-        try:
-            with open(_ini, "w", encoding="utf-8") as _f:
-                _cfg.write(_f)
-        except Exception:
-            pass
-        return diretorio_atual
+        return None  # Sem padrão — vai pedir ao usuário
 
 def _aplicar_pasta_base(pasta):
     """Define DB_PATH, pasta_arquivo e pasta_fretes a partir da pasta base."""
     global DB_PATH, pasta_arquivo, pasta_fretes
+    if not pasta:
+        DB_PATH = ""
+        pasta_arquivo = ""
+        pasta_fretes = ""
+        return
     DB_PATH = os.path.join(pasta, "fornecedores.db")
     for _p, _attr in [(os.path.join(pasta, "ARQUIVO"), "pasta_arquivo"),
                       (os.path.join(pasta, "FRETES"),  "pasta_fretes")]:
@@ -229,17 +231,21 @@ log = logging.getLogger(__name__)
 
 _splash_set(97, "Validando acesso ao banco de dados...")
 _banco_acessivel = True
-try:
-    inicializar_banco_fornecedores(DB_PATH, diretorio_atual)
-except Exception as _e_banco:
+if _CONFIG_INI_NOVO or not DB_PATH:
+    # Primeiro acesso nesta máquina — vai pedir pasta ao usuário, sem erro
     _banco_acessivel = False
-    from tkinter import messagebox as _mb
-    _mb.showerror(
-        "Banco de Dados Inacessível",
-        f"Não foi possível acessar o banco de dados em:\n{DB_PATH}\n\nErro: {_e_banco}\n\n"
-        "Verifique o caminho em Configurações → Banco de Dados após o sistema abrir.",
-        parent=splash
-    )
+else:
+    try:
+        inicializar_banco_fornecedores(DB_PATH, diretorio_atual)
+    except Exception as _e_banco:
+        _banco_acessivel = False
+        from tkinter import messagebox as _mb
+        _mb.showerror(
+            "Banco de Dados Inacessível",
+            f"Não foi possível acessar o banco de dados em:\n{DB_PATH}\n\nErro: {_e_banco}\n\n"
+            "Verifique o caminho em Configurações → Banco de Dados após o sistema abrir.",
+            parent=splash
+        )
 
 _splash_set(100, "Concluído! Abrindo o sistema...")
 cache_fornecedores = carregar_fornecedores_db(DB_PATH) if _banco_acessivel else []
@@ -415,7 +421,7 @@ def criar_tela():
 
         if primeiro_acesso:
             ttkb.Label(janela_cfg,
-                text="  Primeiro acesso — informe a pasta de rede onde estão os dados da empresa.\n"
+                text="  Informe a pasta de rede onde estão os dados da empresa.\n"
                      "  O programa irá ler e salvar tudo nessa pasta (banco, planilhas, fretes).",
                 font=("Segoe UI", 9), bootstyle="warning", padding=6).pack(fill="x", padx=10, pady=(8, 0))
 
@@ -482,12 +488,16 @@ def criar_tela():
                     return
             _cfg_w = configparser.ConfigParser()
             _cfg_w["banco"] = {"pasta": pasta}
-            with open(os.path.join(diretorio_atual, "config.ini"), "w", encoding="utf-8") as _fini:
+            os.makedirs(_CONFIG_LOCAL_DIR, exist_ok=True)
+            with open(_CONFIG_LOCAL_INI, "w", encoding="utf-8") as _fini:
                 _cfg_w.write(_fini)
             _aplicar_pasta_base(pasta)
             try:
                 inicializar_banco_fornecedores(DB_PATH, diretorio_atual)
                 root.atualizar_cache_fornecedores()
+                nova_lista = get_lista_nomes_fornecedores(DB_PATH)
+                combo_forn['values'] = nova_lista
+                combo_forn.master_list = nova_lista
             except Exception:
                 pass
             messagebox.showinfo(
@@ -1678,43 +1688,89 @@ def criar_tela():
             
             modal = tk.Toplevel(root)
             modal.title("Auditoria Financeira")
-            modal.geometry("650x750")
+            modal.geometry("1200x830")
             modal.transient(root)
             modal.grab_set()
-            
-            bg_mod = "#34495e" if getattr(root, 'tema_atual', 'claro') == 'claro' else "#1a1a2e"
-            
-            f_t = tk.Frame(modal, bg=bg_mod, pady=15)
-            f_t.pack(fill="x")
-            tk.Label(f_t, text="TOTAL MERCADORIA + IPI A PAGAR:", fg="white", bg=bg_mod, font=("Segoe UI", 10)).pack()
-            tk.Label(f_t, text=formatar_moeda(tot_nf), fg="#f1c40f", bg=bg_mod, font=("Segoe UI", 18, "bold")).pack()
-            
+
+            bg_mod    = "#0D2B45"
+            bg_header = "#071F33"
+            bg_secao  = "#0A3A6B"
+            fg_gold   = "#F1C40F"
+            fg_text   = "#FFFFFF"
+            fg_muted  = "#AED6F1"
+            modal.configure(bg=bg_mod)
+            # força bg escuro em todos os widgets tk que não tenham cor explícita
+            modal.option_add("*Background",       bg_mod,   70)
+            modal.option_add("*Foreground",       fg_text,  70)
+            modal.option_add("*selectColor",      bg_secao, 70)
+            modal.option_add("*activeBackground", bg_secao, 70)
+            modal.option_add("*activeForeground", fg_gold,  70)
+
+            # estilos ttk para botões com texto branco bold
+            _ms = ttkb.Style()
+            _ms.configure("AuditW.warning.TButton", foreground="white", font=("Segoe UI", 10, "bold"))
+            _ms.configure("AuditS.success.TButton", foreground="white", font=("Segoe UI", 10, "bold"))
+            _ms.configure("AuditP.primary.TButton", foreground="white", font=("Segoe UI", 10, "bold"))
+            _ms.configure("AuditD.dark.TButton",    foreground="white", font=("Segoe UI", 12, "bold"))
+            _ms.map("AuditW.warning.TButton", foreground=[("disabled", "#AAAAAA"), ("active", "white")])
+            _ms.map("AuditS.success.TButton", foreground=[("disabled", "#AAAAAA"), ("active", "white")])
+            _ms.map("AuditP.primary.TButton", foreground=[("disabled", "#AAAAAA"), ("active", "white")])
+            _ms.map("AuditD.dark.TButton",    foreground=[("disabled", "#888888"), ("active", "white")])
+
+            # --- Total (calculado antes do header) ---
             tipo_f = var_tipo_frete.get().strip()
             val_blog = 0.0
             if tipo_f == "CIF":
-                txt_aviso = "🚚 FRETE CIF: B-LOG ISENTA (Receita R$ 0,00)"
-                fg_aviso = "#7f8c8d" if getattr(root, 'tema_atual', 'claro') == 'claro' else "#9ca3af"
+                txt_aviso = "FRETE CIF: ISENTA  (R$ 0,00)"
+                fg_aviso = "#85929E"
             elif tipo_f == "FOB":
                 frete_perc = converter_moeda(linhas_nota[0]['var_frete'].get()) / 100 if linhas_nota else 0
                 val_blog = tot_nf * frete_perc
-                txt_aviso = f"🚚 FRETE FOB: Receita B-LOG {formatar_moeda(val_blog)}"
-                fg_aviso = "#27ae60" if getattr(root, 'tema_atual', 'claro') == 'claro' else "#4ade80"
+                txt_aviso = f"FRETE FOB: B-LOG  {formatar_moeda(val_blog)}"
+                fg_aviso = "#2ECC71"
             else:
-                txt_aviso = "🚚 FRETE TERCEIRIZADO"
-                fg_aviso = "#e67e22" if getattr(root, 'tema_atual', 'claro') == 'claro' else "#fbbf24"
-                
-            tk.Label(f_t, text=txt_aviso, fg=fg_aviso, bg=bg_mod, font=("Segoe UI", 11, "bold")).pack(pady=5)
+                txt_aviso = "FRETE TERCEIRIZADO"
+                fg_aviso = "#E67E22"
+
+            # --- Header compacto (2 linhas) ---
+            f_header = tk.Frame(modal, bg=bg_header)
+            f_header.pack(fill="x")
+            f_row1 = tk.Frame(f_header, bg=bg_header)
+            f_row1.pack(fill="x", padx=15, pady=(5, 1))
+            tk.Label(f_row1, text="AUDITORIA FINANCEIRA", fg=fg_gold, bg=bg_header,
+                     font=("Segoe UI", 10, "bold")).pack(side="left")
+            tk.Label(f_row1, text="  —  " + combo_forn.get().upper(), fg="#AED6F1", bg=bg_header,
+                     font=("Segoe UI", 9)).pack(side="left")
+            f_row2 = tk.Frame(f_header, bg=bg_header)
+            f_row2.pack(fill="x", padx=15, pady=(0, 5))
+            tk.Label(f_row2, text="TOTAL:  ", fg=fg_muted, bg=bg_header,
+                     font=("Segoe UI", 8, "bold")).pack(side="left")
+            tk.Label(f_row2, text=formatar_moeda(tot_nf), fg=fg_gold, bg=bg_header,
+                     font=("Segoe UI", 14, "bold")).pack(side="left")
+            tk.Label(f_row2, text=f"     {txt_aviso}", fg=fg_aviso, bg=bg_header,
+                     font=("Segoe UI", 9, "bold")).pack(side="left")
+            tk.Frame(modal, bg=fg_gold, height=2).pack(fill="x")
+            tk.Frame(modal, bg=bg_secao, height=1).pack(fill="x", padx=20, pady=(4, 0))
             
-            f_p = tk.Frame(modal, pady=10)
+            tk.Label(modal, text="  FORMA DE PAGAMENTO", fg="white", bg=bg_secao,
+                     font=("Segoe UI", 9, "bold"), anchor="w", pady=4
+                     ).pack(fill="x", padx=20, pady=(8, 0))
+            f_p = tk.Frame(modal, pady=4, bg=bg_mod)
             f_p.pack(fill="x", padx=20)
             var_pag = tk.StringVar(value="BOLETOS")
-            f_b = tk.Frame(modal, pady=10)
-            lbl_d = tk.Label(modal, text="DIFERENÇA: " + formatar_moeda(tot_nf), font=("Segoe UI", 14, "bold"), fg="#c0392b")
-            
+            f_b = tk.Frame(modal, pady=4, bg=bg_mod)
+            f_status_bar = tk.Frame(modal, bg="white", pady=5,
+                                    highlightthickness=1, highlightbackground=fg_gold)
+            lbl_d = tk.Label(f_status_bar, text="DIFERENÇA: " + formatar_moeda(tot_nf),
+                             font=("Segoe UI", 13, "bold"), fg="#E74C3C", bg="white")
+
             var_dinheiro = tk.StringVar(value="R$ 0,00")
-            f_dinheiro = tk.Frame(f_b)
-            tk.Label(f_dinheiro, text="Entrada em Dinheiro:", width=18, anchor="e", font=("Segoe UI", 10, "bold"), fg="#27ae60").pack(side="left")
-            ent_dinheiro = tk.Entry(f_dinheiro, textvariable=var_dinheiro, width=16, justify="right", font=("Segoe UI", 10, "bold"))
+            f_dinheiro = tk.Frame(f_b, bg=bg_mod)
+            tk.Label(f_dinheiro, text="Entrada em Dinheiro:", width=18, anchor="e",
+                     font=("Segoe UI", 10, "bold"), fg="#2ECC71", bg=bg_mod).pack(side="left")
+            ent_dinheiro = tk.Entry(f_dinheiro, textvariable=var_dinheiro, width=16, justify="right",
+                                    font=("Segoe UI", 10, "bold"), bg=bg_secao, fg=fg_gold,
+                                    insertbackground="white", relief="flat", bd=5)
             ent_dinheiro.pack(side="left", padx=10, ipady=3)
 
             def format_dinheiro_entrada(e=None):
@@ -1724,125 +1780,278 @@ def criar_tela():
             ent_dinheiro.bind("<Return>", format_dinheiro_entrada)
 
             def check():
-                if var_pag.get() == "BLU / À VISTA": 
+                if var_pag.get() == "BLU / À VISTA":
                     f_b.pack_forget()
                     f_dinheiro.pack_forget()
-                    lbl_d.config(text="LIBERADO (BLU / À VISTA)", fg="#27ae60")
-                    btn_e.config(state="normal")
-                elif var_pag.get() == "PENDENTES": 
+                    lbl_d.config(text="✅ LIBERADO (BLU / À VISTA)", fg="#1A7A3E", bg="white")
+                    btn_e.config(state="normal", bg="#C0392B", fg="white")
+                elif var_pag.get() == "PENDENTES":
                     f_b.pack_forget()
                     f_dinheiro.pack_forget()
-                    lbl_d.config(text="⚠️ LIBERADO COM PENDÊNCIA", fg="#f39c12")
-                    btn_e.config(state="normal")
+                    lbl_d.config(text="⚠️ LIBERADO COM PENDÊNCIA", fg="#B8600A", bg="white")
+                    btn_e.config(state="normal", bg="#C0392B", fg="white")
                 elif var_pag.get() == "DINHEIRO + BOLETO":
-                    f_b.pack(fill="x", padx=20)
-                    f_dinheiro.pack(fill="x", pady=(0, 10))
+                    f_b.pack(fill="x", padx=20, before=f_status_bar)
+                    f_dinheiro.pack(fill="x", pady=(0, 6), before=f_boletos)
                     recalcular()
-                else: 
-                    f_b.pack(fill="x", padx=20)
+                else:
+                    f_b.pack(fill="x", padx=20, before=f_status_bar)
                     f_dinheiro.pack_forget()
                     var_dinheiro.set("R$ 0,00")
                     recalcular()
                     
-            tk.Radiobutton(f_p, text="BLU / Transferência À Vista", variable=var_pag, value="BLU / À VISTA", command=check).pack(anchor="w")
-            tk.Radiobutton(f_p, text="Pagamento em Boletos", variable=var_pag, value="BOLETOS", command=check).pack(anchor="w")
-            tk.Radiobutton(f_p, text="Dinheiro + Boleto (Misto)", variable=var_pag, value="DINHEIRO + BOLETO", command=check).pack(anchor="w")
-            tk.Radiobutton(f_p, text="⏳ Boletos Pendentes (Aguardando Retorno)", variable=var_pag, value="PENDENTES", command=check).pack(anchor="w")
+            _rb = dict(bg=bg_mod, fg=fg_text, font=("Segoe UI", 10),
+                       selectcolor=bg_secao, activebackground=bg_mod, activeforeground=fg_gold)
+            tk.Radiobutton(f_p, text="BLU / Transferencia a Vista", variable=var_pag, value="BLU / À VISTA", command=check, **_rb).pack(anchor="w")
+            tk.Radiobutton(f_p, text="Pagamento em Boletos",        variable=var_pag, value="BOLETOS",          command=check, **_rb).pack(anchor="w")
+            tk.Radiobutton(f_p, text="Dinheiro + Boleto (Misto)",   variable=var_pag, value="DINHEIRO + BOLETO", command=check, **_rb).pack(anchor="w")
+            tk.Radiobutton(f_p, text="Boletos Pendentes (Aguardando Retorno)", variable=var_pag, value="PENDENTES", command=check, **_rb).pack(anchor="w")
             
-            f_boletos = tk.Frame(f_b)
-            f_boletos.pack(fill="x")
-            
+            f_boletos = tk.Frame(f_b, bg=bg_mod)
+            f_boletos.pack(fill="x", pady=(4, 0))
+            f_boletos_col1 = tk.Frame(f_boletos, bg=bg_mod)
+            f_boletos_col1.pack(side="left", fill="both", expand=True, padx=(0, 6))
+            tk.Frame(f_boletos, bg=bg_secao, width=2).pack(side="left", fill="y")
+            f_boletos_col2 = tk.Frame(f_boletos, bg=bg_mod)
+            f_boletos_col2.pack(side="left", fill="both", expand=True, padx=(6, 6))
+            tk.Frame(f_boletos, bg=bg_secao, width=2).pack(side="left", fill="y")
+            f_boletos_col3 = tk.Frame(f_boletos, bg=bg_mod)
+            f_boletos_col3.pack(side="left", fill="both", expand=True, padx=(6, 0))
+
             vars_b = []
             entradas_b = []
-            prazos = [30, 60, 90, 120, 150, 180, 210, 240, 270, 300]
-            
+            prazos = [30, 60, 90, 120, 150, 180, 210, 240, 270]
+
             def recalcular(*args):
                 s_boletos = sum(converter_moeda(v.get()) for v in vars_b)
                 v_dinheiro = converter_moeda(var_dinheiro.get()) if var_pag.get() == "DINHEIRO + BOLETO" else 0.0
-                
                 diff = tot_nf - v_dinheiro - s_boletos
-                
-                if abs(diff) < 0.05: 
-                    lbl_d.config(text="🟢 BATEU! R$ 0,00", fg="#27ae60")
-                    btn_e.config(state="normal")
-                else: 
-                    lbl_d.config(text="🔴 DIFERENÇA: " + formatar_moeda(diff), fg="#c0392b")
-                    btn_e.config(state="disabled")
+                if abs(diff) < 0.05:
+                    lbl_d.config(text="✅  BATEU!  R$ 0,00", fg="#1A7A3E", bg="white")
+                    btn_e.config(state="normal",   bg="#C0392B", fg="white")
+                else:
+                    lbl_d.config(text="🔴  DIFERENÇA:  " + formatar_moeda(diff), fg="#c0392b", bg="white")
+                    btn_e.config(state="disabled", bg="#7B241C")
 
             var_dinheiro.trace_add("write", recalcular)
-            
-            def add_boleto():
-                idx = len(vars_b)
-                if idx >= 10: return
-                var = tk.StringVar()
-                vars_b.append(var)
-                row_frame = tk.Frame(f_boletos)
-                row_frame.pack(fill="x", pady=2)
-                tk.Label(row_frame, text=f"Boleto {idx+1} ({prazos[idx]} Dias):", width=16, anchor="e").pack(side="left")
-                e = tk.Entry(row_frame, textvariable=var, width=16, justify="right", font=("Segoe UI", 10))
-                e.pack(side="left", padx=10, ipady=3)
-                e.bind("<FocusOut>", lambda ev, v=var: v.set(formatar_moeda(converter_moeda(v.get())) if v.get() else ""))
-                e.bind("<Return>", lambda ev: btn_add.invoke() if len(vars_b) < 10 else btn_e.focus_set())
-                var.trace_add("write", recalcular)
-                entradas_b.append(e)
-                e.focus_set()
-                
-            btn_add = tk.Button(f_b, text="+ Adicionar Boleto", command=add_boleto, font=("Segoe UI", 9, "bold"), relief="flat", cursor="hand2", padx=10, pady=5)
-            btn_add.pack(pady=10)
-            add_boleto()
-            lbl_d.pack(pady=15)
-            
-            # === FUNÇÃO DE COPIAR EMBUTIDA NA AUDITORIA ===
-            def copiar_resumo_area_transferencia():
-                # Cabeçalho da mensagem
-                texto_copia = f"📌 *RESUMO DE PRECIFICAÇÃO - {combo_forn.get()}*\n"
-                texto_copia += f"📝 Nota: {var_num_nota.get()} | Pedido: {var_pedido.get()}\n"
-                texto_copia += f"==============================\n\n"
 
-                # Loop pelos produtos
+            for _i in range(9):
+                _var = tk.StringVar()
+                vars_b.append(_var)
+                _parent = f_boletos_col1 if _i < 3 else (f_boletos_col2 if _i < 6 else f_boletos_col3)
+                _row = tk.Frame(_parent, bg=bg_mod)
+                _row.pack(fill="x", pady=2)
+                tk.Label(_row, text=f"Boleto {_i+1}  ({prazos[_i]} d):", width=17, anchor="e",
+                         bg=bg_mod, fg=fg_muted, font=("Segoe UI", 9)).pack(side="left")
+                _e = tk.Entry(_row, textvariable=_var, width=14, justify="right",
+                              font=("Segoe UI", 10, "bold"), bg=bg_secao, fg=fg_gold,
+                              insertbackground="white", relief="flat", bd=4)
+                _e.pack(side="left", padx=6, ipady=3)
+                _e.bind("<FocusOut>", lambda ev, v=_var: v.set(formatar_moeda(converter_moeda(v.get())) if v.get() else ""))
+                _e.bind("<Return>", lambda ev, i=_i: entradas_b[i+1].focus_set() if i < 8 else btn_e.focus_set())
+                _var.trace_add("write", recalcular)
+                entradas_b.append(_e)
+            entradas_b[0].focus_set()
+
+            lbl_d.pack(pady=4)
+            f_status_bar.pack(fill="x", padx=20, pady=(4, 2))
+            
+            # === GERAÇÃO DE IMAGENS PARA CLIPBOARD ===
+            def _get_font_pil(size, bold=False):
+                from PIL import ImageFont as _IF
+                candidatos = [
+                    (r"C:\Windows\Fonts\segoeuib.ttf" if bold else r"C:\Windows\Fonts\segoeui.ttf"),
+                    r"C:\Windows\Fonts\arialbd.ttf" if bold else r"C:\Windows\Fonts\arial.ttf",
+                ]
+                for p in candidatos:
+                    try: return _IF.truetype(p, size)
+                    except: pass
+                return _IF.load_default()
+
+            def _copiar_imagem_clipboard(img):
+                import tempfile as _tmp, subprocess as _sp
+                f = _tmp.NamedTemporaryFile(suffix=".png", delete=False)
+                path = f.name; f.close()
+                img.save(path, "PNG")
+                ps = (
+                    "Add-Type -AssemblyName System.Windows.Forms;"
+                    "Add-Type -AssemblyName System.Drawing;"
+                    f"$i=[System.Drawing.Image]::FromFile('{path.replace(chr(92),chr(47))}');"
+                    "[System.Windows.Forms.Clipboard]::SetImage($i);$i.Dispose()"
+                )
+                _sp.run(["powershell", "-NonInteractive", "-Command", ps],
+                        capture_output=True, timeout=12)
+                try: os.unlink(path)
+                except: pass
+
+            def _gerar_imagem_chefe():
+                from PIL import Image as _Im, ImageDraw as _ID
+                C_BG     = (23,  32,  42)
+                C_BG2    = (28,  40,  51)
+                C_ROW    = (33,  47,  61)
+                C_GOLD   = (241,196,  15)
+                C_WHITE  = (236,240, 241)
+                C_MUTED  = (189,195, 199)
+                C_BLUE   = (174,214, 241)
+                C_SEP    = (241,196,  15)
+                W = 760; PAD = 28
+                forn   = combo_forn.get()
+                nf     = var_num_nota.get()
+                pedido = var_pedido.get()
+                data   = datetime.now().strftime("%d/%m/%Y")
+                prods  = [
+                    {"cod":      r["var_cod"].get().strip(),
+                     "nome":     r["var_nome"].get(),
+                     "custo_ant": r["var_venda_antiga"].get(),
+                     "custo":    r["var_novo_custo"].get(),
+                     "venda":    r["var_venda"].get(),
+                     "prazo":    r["var_prazo"].get()}
+                    for r in linhas_nota
+                    if r["var_cod"].get().strip()
+                    and r["var_nome"].get() not in ["---", "❌ PRODUTO NÃO ENCONTRADO"]
+                ]
+                fT = _get_font_pil(16, bold=True)
+                fS = _get_font_pil(13)
+                fP = _get_font_pil(14, bold=True)
+                fV = _get_font_pil(13)
+                fF = _get_font_pil(13, bold=True)
+                HEADER_H = 100; SUB_H = 40; ROW_H = 78; FOOT_H = 56; SEP = 2
+                H = HEADER_H + SUB_H + SEP + len(prods)*ROW_H + (max(0,len(prods)-1)*SEP) + FOOT_H
+                img = _Im.new("RGB", (W, H), C_BG)
+                d   = _ID.Draw(img)
+                # Header
+                d.rectangle([0,0,W,HEADER_H], fill=C_BG)
+                d.text((PAD, 18), "RESUMO DE PRECIFICACAO", fill=C_GOLD, font=fT)
+                d.text((PAD, 44), f"Fornecedor: {forn}", fill=C_BLUE, font=fS)
+                d.text((PAD, 64), f"NF: {nf}   |   Pedido: {pedido}   |   {data}", fill=C_MUTED, font=fV)
+                d.rectangle([0, HEADER_H, W, HEADER_H+SEP], fill=C_SEP)
+                # Sub-header
+                y = HEADER_H + SEP
+                d.rectangle([0, y, W, y+SUB_H], fill=(19,27,36))
+                d.text((PAD,   y+20), "PRODUTO",    fill=C_MUTED, font=fF, anchor="lm")
+                d.text((W-285, y+20), "CUSTO NOVO", fill=C_MUTED, font=fF, anchor="mm")
+                d.text((W-165, y+20), "VENDA",      fill=C_MUTED, font=fF, anchor="mm")
+                d.text((W-55,  y+20), "PRAZO",      fill=C_MUTED, font=fF, anchor="mm")
+                y += SUB_H
+                # Produtos
+                for i, p in enumerate(prods):
+                    bg = C_BG2 if i%2==0 else C_ROW
+                    d.rectangle([0, y, W, y+ROW_H], fill=bg)
+                    texto = f"[{p['cod']}]  " + p["nome"]
+                    max_w = W - 350 - PAD - 10
+                    orig  = texto
+                    while d.textlength(texto, font=fP) > max_w:
+                        texto = texto[:-1]
+                    if len(texto) < len(orig):
+                        texto = texto[:-1] + "…"
+                    mid = y + ROW_H // 2
+                    d.text((PAD,   y+18), texto,                        fill=C_WHITE,  font=fP, anchor="lm")
+                    d.text((PAD,   y+50), f"Preço ant: {p['custo_ant']}", fill=C_MUTED, font=fS, anchor="lm")
+                    d.text((W-285, mid),  p["custo"], fill=C_WHITE, font=fP, anchor="mm")
+                    d.text((W-165, mid),  p["venda"], fill=C_WHITE, font=fP, anchor="mm")
+                    d.text((W-55,  mid),  p["prazo"], fill=C_WHITE, font=fP, anchor="mm")
+                    y += ROW_H
+                    if i < len(prods)-1:
+                        d.rectangle([0,y,W,y+SEP], fill=(40,55,71))
+                        y += SEP
+                # Footer
+                d.rectangle([0, y, W, H], fill=C_BG)
+                resumo = re.sub(r'Itens:\s*\d+\s*\|\s*','', lbl_res_formula.cget("text"))
+                d.text((PAD, y+18), resumo, fill=C_MUTED, font=fF)
+                return img
+
+            def _gerar_imagem_lojas():
+                from PIL import Image as _Im, ImageDraw as _ID
+                C_BG   = (11, 61, 37)
+                C_BG2  = (8,  46, 28)
+                C_ROW  = (15, 77, 46)
+                C_GOLD = (241,196, 15)
+                C_WHITE= (236,240,241)
+                C_MUTED= (161,221,192)
+                C_SEP  = (39,174, 96)
+                W = 760; PAD = 28
+                forn   = combo_forn.get()
+                data   = datetime.now().strftime("%d/%m/%Y")
+                regime_av = var_regime.get()
+                prods = []
                 for r in linhas_nota:
-                    nome = r['var_nome'].get()
-                    if r['var_cod'].get().strip() and nome not in ["---", "❌ PRODUTO NÃO ENCONTRADO"]:
-                        custo = r['var_novo_custo'].get()
-                        venda = r['var_venda'].get()
-                        prazo = r['var_prazo'].get()
-                        texto_copia += f"▪ {nome}\n   Custo: {custo} | Venda: {venda} | Prazo: {prazo}\n\n"
-                        
-                texto_copia += f"==============================\n"
+                    if r["var_cod"].get().strip() and r["var_nome"].get() not in ["---", "❌ PRODUTO NÃO ENCONTRADO"]:
+                        q_nf  = r["var_qtd_nf"].get()
+                        q_bon = r["var_qtd_rom"].get()
+                        if regime_av == "MISTA (NF + Romaneio)":
+                            qtd = q_bon
+                        elif regime_av == "NOTA + BONIFICAÇÃO":
+                            try: tot = int(float(q_nf or 0)+float(q_bon or 0))
+                            except: tot = "?"
+                            qtd = f"{q_nf} NF + {q_bon} Bon = {tot} un"
+                        else:
+                            qtd = q_nf
+                        prods.append({"cod": r["var_cod"].get().strip(),
+                                      "nome": r["var_nome"].get(),
+                                      "qtd": qtd,
+                                      "venda": r["var_venda"].get(),
+                                      "prazo": r["var_prazo"].get()})
+                fT = _get_font_pil(16, bold=True)
+                fS = _get_font_pil(13)
+                fP = _get_font_pil(14, bold=True)
+                fV = _get_font_pil(13)
+                fF = _get_font_pil(13, bold=True)
+                HEADER_H = 90; SUB_H = 40; ROW_H = 62; FOOT_H = 46; SEP = 2
+                H = HEADER_H + SUB_H + SEP + len(prods)*ROW_H + (max(0,len(prods)-1)*SEP) + FOOT_H
+                img = _Im.new("RGB", (W, H), C_BG)
+                d   = _ID.Draw(img)
+                # Header
+                d.rectangle([0,0,W,HEADER_H], fill=C_BG2)
+                d.text((PAD, 16), "AVISO DE NOVOS PRECOS", fill=C_GOLD, font=fT)
+                d.text((PAD, 46), f"Fornecedor: {forn}   |   {data}", fill=C_MUTED, font=fS)
+                d.rectangle([0, HEADER_H, W, HEADER_H+SEP], fill=C_SEP)
+                # Sub-header
+                y = HEADER_H + SEP
+                d.rectangle([0,y,W,y+SUB_H], fill=(6,36,22))
+                d.text((PAD,   y+20), "PRODUTO", fill=C_MUTED, font=fF, anchor="lm")
+                d.text((W-260, y+20), "QTD",     fill=C_MUTED, font=fF, anchor="mm")
+                d.text((W-155, y+20), "VENDA",   fill=C_MUTED, font=fF, anchor="mm")
+                d.text((W-50,  y+20), "PRAZO",   fill=C_MUTED, font=fF, anchor="mm")
+                y += SUB_H
+                # Produtos
+                for i, p in enumerate(prods):
+                    bg = C_BG if i%2==0 else C_ROW
+                    d.rectangle([0,y,W,y+ROW_H], fill=bg)
+                    texto = f"[{p['cod']}]  " + p["nome"]
+                    max_w = W - 310 - PAD - 10
+                    orig  = texto
+                    while d.textlength(texto, font=fP) > max_w:
+                        texto = texto[:-1]
+                    if len(texto) < len(orig):
+                        texto = texto[:-1] + "…"
+                    d.text((PAD,   y+31), texto,    fill=C_WHITE, font=fP, anchor="lm")
+                    d.text((W-260, y+31), p["qtd"],   fill=C_WHITE, font=fP, anchor="mm")
+                    d.text((W-155, y+31), p["venda"], fill=C_WHITE, font=fP, anchor="mm")
+                    d.text((W-50,  y+31), p["prazo"], fill=C_WHITE, font=fP, anchor="mm")
+                    y += ROW_H
+                    if i < len(prods)-1:
+                        d.rectangle([0,y,W,y+SEP], fill=(20,90,50))
+                        y += SEP
+                # Footer
+                d.rectangle([0,y,W,H], fill=C_BG2)
+                d.text((PAD, y+14), "Boas vendas!", fill=C_MUTED, font=fF)
+                return img
 
-                # Limpeza do rodapé
-                resumo_base = lbl_res_formula.cget("text")
-                resumo_limpo = re.sub(r'Itens:\s*\d+\s*\|\s*', '', resumo_base)
-                
-                texto_copia += resumo_limpo + "\n\nBoas vendas!"
-                
-                root.clipboard_clear()
-                root.clipboard_append(texto_copia)
-                messagebox.showinfo("Copiado!", "Resumo copiado para o WhatsApp!")
+            def copiar_resumo_area_transferencia():
+                try:
+                    img = _gerar_imagem_chefe()
+                    _copiar_imagem_clipboard(img)
+                    messagebox.showinfo("Copiado!", "Imagem do resumo copiada!\nCola com Ctrl+V no WhatsApp.")
+                except Exception as _ex:
+                    messagebox.showerror("Erro", f"Nao foi possivel gerar a imagem:\n{_ex}")
 
             def copiar_aviso_lojas():
-                regime_av = var_regime.get()
-                texto = f"🏪 *AVISO DE NOVOS PREÇOS - {combo_forn.get()}*\n"
-                texto += f"==============================\n\n"
-                for r in linhas_nota:
-                    if r['var_cod'].get().strip() and r['var_nome'].get() not in ["---", "❌ PRODUTO NÃO ENCONTRADO"]:
-                        cod   = r['var_cod'].get().strip()
-                        nome  = r['var_nome'].get()
-                        q_nf  = r['var_qtd_nf'].get()
-                        q_bon = r['var_qtd_rom'].get()
-                        venda = r['var_venda'].get()
-                        prazo = r['var_prazo'].get()
-                        if regime_av == "MISTA (NF + Romaneio)":
-                            qtd_txt = q_bon
-                        elif regime_av == "NOTA + BONIFICAÇÃO":
-                            qtd_txt = f"{q_nf} NF + {q_bon} Bon = {int(float(q_nf or 0)+float(q_bon or 0))} un"
-                        else:
-                            qtd_txt = q_nf
-                        texto += f"▪ Cód: {cod} | {nome}\n   Qtd: {qtd_txt} | Venda: {venda} | Prazo: {prazo}\n\n"
-                texto += f"=============================="
-                root.clipboard_clear()
-                root.clipboard_append(texto)
-                messagebox.showinfo("Copiado!", "Aviso para as lojas copiado!\n\nAgora é só apertar Ctrl+V no WhatsApp das lojas.")
+                try:
+                    img = _gerar_imagem_lojas()
+                    _copiar_imagem_clipboard(img)
+                    messagebox.showinfo("Copiado!", "Imagem de aviso para as lojas copiada!\nCola com Ctrl+V no WhatsApp.")
+                except Exception as _ex:
+                    messagebox.showerror("Erro", f"Nao foi possivel gerar a imagem:\n{_ex}")
 
             def executar_exportacao():
                 root.status_pagamento = var_pag.get()
@@ -1907,25 +2116,36 @@ def criar_tela():
                 atualizar_alerta_pendencias()
                 alerta_topo("Planilha de Precificação gerada na pasta ARQUIVO!\nEspelho aberto no navegador.", "info", "Sucesso")
                 
+            tk.Frame(modal, bg=bg_secao, height=1).pack(fill="x", padx=20, pady=(4,0))
             f_botoes_modal = tk.Frame(modal, bg=bg_mod)
             f_botoes_modal.pack(fill="x", padx=20, pady=10)
 
-            # Linha 1 — botões de cópia lado a lado
+            # Linha 1 — botões de imagem lado a lado
             f_linha1 = tk.Frame(f_botoes_modal, bg=bg_mod)
             f_linha1.pack(fill="x", pady=(0, 6))
 
-            btn_copiar = tk.Button(f_linha1, text="📋 COPIAR RESUMO P/ CHEFE", bg="#f39c12", fg="white", activebackground="#d68910", activeforeground="white", font=("Segoe UI", 10, "bold"), relief="flat", pady=10, command=copiar_resumo_area_transferencia)
-            btn_copiar.pack(side="left", fill="x", expand=True, padx=(0, 5))
+            btn_copiar = ttkb.Button(f_linha1, text="IMAGEM RESUMO P/ CHEFE",
+                                     style="AuditW.warning.TButton", cursor="hand2", padding=(0, 9),
+                                     command=copiar_resumo_area_transferencia)
+            btn_copiar.pack(side="left", fill="x", expand=True, padx=(0, 4))
 
-            btn_aviso_lojas = tk.Button(f_linha1, text="🏪 CRIAR AVISO PARA AS LOJAS", bg="#27ae60", fg="white", activebackground="#1e8449", activeforeground="white", font=("Segoe UI", 10, "bold"), relief="flat", pady=10, command=copiar_aviso_lojas)
-            btn_aviso_lojas.pack(side="left", fill="x", expand=True, padx=(5, 0))
+            btn_aviso_lojas = ttkb.Button(f_linha1, text="IMAGEM AVISO PARA AS LOJAS",
+                                          style="AuditS.success.TButton", cursor="hand2", padding=(0, 9),
+                                          command=copiar_aviso_lojas)
+            btn_aviso_lojas.pack(side="left", fill="x", expand=True, padx=(4, 0))
 
             # Linha 2 — confirmar e gerar (largura total)
             f_linha2 = tk.Frame(f_botoes_modal, bg=bg_mod)
             f_linha2.pack(fill="x")
 
-            btn_e = tk.Button(f_linha2, text="✅ CONFIRMAR E GERAR", bg="#2980b9", fg="white", activebackground="#1f618d", activeforeground="white", font=("Segoe UI", 10, "bold"), relief="flat", pady=10, command=executar_exportacao)
-            btn_e.pack(fill="x")
+            btn_e = tk.Button(f_linha2, text="CONFIRMAR E GERAR PLANILHA",
+                              bg="#C0392B", fg="white",
+                              font=("Segoe UI", 12, "bold"),
+                              activebackground="#E74C3C", activeforeground="white",
+                              disabledforeground="#CCCCCC",
+                              cursor="hand2", relief="flat", bd=0)
+            btn_e.config(command=executar_exportacao)
+            btn_e.pack(fill="x", ipady=10)
             check()
             
         except Exception as e:
@@ -2008,9 +2228,62 @@ def criar_tela():
             if not hex_bg.startswith("#"):
                 hex_bg = "#" + hex_bg
             _img_logo_footer = _criar_logo_img(_logo_rgba, hex_bg)
-            lbl_logo = tk.Label(f_resumo_container, image=_img_logo_footer, bg=hex_bg, bd=0)
+            lbl_logo = tk.Label(f_resumo_container, image=_img_logo_footer, bg=hex_bg,
+                                bd=0, cursor="hand2")
             lbl_logo.image = _img_logo_footer
             lbl_logo.pack(side="right", padx=(0, 18), pady=2)
+
+            _cartao_ref = [None]
+            def mostrar_cartao_visitas(event=None):
+                if _cartao_ref[0] and _cartao_ref[0].winfo_exists():
+                    _cartao_ref[0].destroy()
+                    _cartao_ref[0] = None
+                    return
+                card = tk.Toplevel(root)
+                card.overrideredirect(True)
+                card.attributes("-topmost", True)
+                W_c, H_c = 420, 210
+                rx = root.winfo_rootx() + (root.winfo_width()  - W_c) // 2
+                ry = root.winfo_rooty() + (root.winfo_height() - H_c) // 2
+                card.geometry(f"{W_c}x{H_c}+{rx}+{ry}")
+                _cartao_ref[0] = card
+
+                C_BG    = "#1B4F6A"
+                C_GOLD  = "#C9A84C"
+                C_WHITE = "#EAEAEA"
+                C_MUTED = "#7A8FA6"
+
+                card.configure(bg=C_BG)
+                cv = tk.Canvas(card, width=W_c, height=H_c,
+                               bg=C_BG, bd=0, highlightthickness=0)
+                cv.pack(fill="both", expand=True)
+
+                # Fundo sólido (garante cor no Windows)
+                cv.create_rectangle(0, 0, W_c, H_c, fill=C_BG, outline="")
+                # Borda dourada
+                cv.create_rectangle(2, 2, W_c-2, H_c-2, outline=C_GOLD, width=1)
+                # Barra esquerda dourada
+                cv.create_rectangle(0, 0, 6, H_c, fill=C_GOLD, outline="")
+
+                # Nome
+                cv.create_text(30, 68, text="WALTER VOGA", anchor="w",
+                               fill=C_WHITE, font=("Segoe UI", 22, "bold"))
+
+                # Linha separadora dourada
+                cv.create_line(30, 97, W_c-22, 97, fill=C_GOLD, width=1)
+
+                # Cargo
+                cv.create_text(30, 121, text="Desenvolvedor", anchor="w",
+                               fill=C_GOLD, font=("Segoe UI", 12))
+
+                # Telefone
+                cv.create_text(30, 155, text="(22) 99939-0202", anchor="w",
+                               fill=C_MUTED, font=("Segoe UI", 12))
+
+                cv.bind("<Button-1>", lambda e: card.destroy())
+                card.bind("<FocusOut>",  lambda e: card.destroy())
+
+            lbl_logo.bind("<Button-1>", mostrar_cartao_visitas)
         except Exception:
             pass
 
@@ -2038,9 +2311,6 @@ def criar_tela():
     btn_buscar.pack(side="left", padx=5)
     ToolTip(btn_buscar, text="Pesquisar por Nota, Pedido ou Fornecedor (Atalho: Ctrl + F)")
     
-    btn_abrir = ttkb.Button(f_botoes_acao, text="📂 ABRIR SALVA", style="VerdeClaro.TButton", command=abrir_precificacao_salva)
-    btn_abrir.pack(side="left", padx=5)
-
     btn_salvar_reimprimir = ttkb.Button(f_botoes_acao, text="💾 SALVAR E REIMPRIMIR", style="VerdeSalvar.TButton", command=reimprimir_processo)
     btn_salvar_reimprimir.pack(side="left", padx=5)
     ToolTip(btn_salvar_reimprimir, text="Salva os preços editados no arquivo original e reabre o espelho")
@@ -2087,7 +2357,7 @@ def criar_tela():
     root.bind("<Control-F>", lambda e: pesquisar_carga_salva())
 
     root.after(100, lambda: limpar_nota(pergunta=False, add_linha=True))
-    if _CONFIG_INI_NOVO:
+    if _CONFIG_INI_NOVO or not _banco_acessivel:
         root.after(600, lambda: abrir_config_banco(primeiro_acesso=True))
     root.mainloop()
 

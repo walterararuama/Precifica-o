@@ -1,71 +1,19 @@
 # -*- mode: python ; coding: utf-8 -*-
-# Compilação onefile — apenas o Precificacao.exe precisa ser copiado para os usuários.
+
 
 a = Analysis(
     ['Precificacao.py'],
     pathex=[],
     binaries=[],
-    datas=[('voga.png', '.'), ('icone.ico', '.'), ('Bruno.png', '.')],
-    hiddenimports=[
-        # openpyxl (leitura/escrita de Excel)
-        'openpyxl',
-        'openpyxl.cell',
-        'openpyxl.cell._writer',
-        'openpyxl.styles',
-        'openpyxl.styles.alignment',
-        'openpyxl.styles.borders',
-        'openpyxl.styles.colors',
-        'openpyxl.styles.fills',
-        'openpyxl.styles.fonts',
-        'openpyxl.styles.numbers',
-        'openpyxl.styles.protection',
-        'openpyxl.utils',
-        'openpyxl.utils.dataframe',
-        'openpyxl.workbook',
-        'openpyxl.worksheet',
-        'openpyxl.worksheet.worksheet',
-        'et_xmlfile',
-        # babel (usado pelo pandas internamente)
-        'babel',
-        'babel.numbers',
-        'babel.core',
-        # Pillow (ttkbootstrap pode precisar)
-        'PIL',
-        'PIL.Image',
-        'PIL.ImageTk',
-        'PIL.ImageDraw',
-        'PIL.ImageFont',
-        # ttkbootstrap
-        'ttkbootstrap',
-        'ttkbootstrap.themes',
-        'ttkbootstrap.themes.standard',
-        'ttkbootstrap.localization',
-        'ttkbootstrap.dialogs',
-        'ttkbootstrap.dialogs.dialogs',
-        'ttkbootstrap.widgets',
-        'ttkbootstrap.scrolled',
-        'ttkbootstrap.toast',
-        'ttkbootstrap.tooltip',
-        'ttkbootstrap.validation',
-        # sqlite3 (banco de fornecedores)
-        '_sqlite3',
-    ],
+    datas=[],
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[
-        'matplotlib',
-        'scipy',
-        'IPython',
-        'pytest',
-        'jupyter',
-        'notebook',
-        'tkinter.test',
-    ],
+    excludes=[],
     noarchive=False,
-    optimize=1,
+    optimize=0,
 )
-
 pyz = PYZ(a.pure)
 
 exe = EXE(
@@ -87,5 +35,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='icone.ico',
+    icon=['icone.ico'],
 )
