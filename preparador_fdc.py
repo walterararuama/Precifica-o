@@ -67,7 +67,13 @@ def processar_posicao(caminho: str, log_fn) -> pd.DataFrame:
         log_fn(f"  [AVISO] '{nome}' nao possui coluna 'Subtotal.1' — ignorado.")
         return pd.DataFrame()
 
-    mascara = df["Subtotal.1"].apply(lambda v: str(v).strip() == "0" if pd.notna(v) else False)
+    def _eh_zero(v):
+        try:
+            return float(str(v).replace(',', '.').strip()) == 0.0
+        except Exception:
+            return False
+
+    mascara = df["Subtotal.1"].apply(lambda v: _eh_zero(v) if pd.notna(v) else False)
     df = df[mascara].copy()
     removidas = total_lidas - len(df)
     log_fn(f"  {len(df)} registros validos  |  {removidas} linhas removidas")
