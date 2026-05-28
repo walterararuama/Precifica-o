@@ -90,8 +90,7 @@ def executar(pasta, log_fn, on_done):
         return
 
     basico_csvs  = [f for f in todos_csvs if eh_produto_basico(f)]
-    posicao_csvs = [f for f in todos_csvs if eh_posicao_financeira(f)
-                    and os.path.basename(f).lower() != ARQUIVO_SAIDA_POSICAO.lower()]
+    posicao_csvs = [f for f in todos_csvs if eh_posicao_financeira(f)]
 
     log_fn(f"{len(todos_csvs)} arquivo(s) reconhecido(s):")
     for f in todos_csvs:
