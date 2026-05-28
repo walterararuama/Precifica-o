@@ -1983,7 +1983,7 @@ def criar_tela():
                         elif regime_av == "NOTA + BONIFICAÇÃO":
                             try: tot = int(float(q_nf or 0)+float(q_bon or 0))
                             except: tot = "?"
-                            qtd = f"{q_nf} NF + {q_bon} Bon = {tot} un"
+                            qtd = str(tot)
                         else:
                             qtd = q_nf
                         prods.append({"cod": r["var_cod"].get().strip(),
