@@ -2456,7 +2456,6 @@ def criar_tela():
                       relief="flat", bd=0, highlightthickness=0, padx=22, pady=8, cursor="hand2",
                       activebackground="#1A6FA8", activeforeground="white",
                       command=_salvar_edit).pack(side="left")
-            tk.Frame(f_eb, bg=BG, width=14, highlightthickness=0).pack(side="left")
             tk.Button(f_eb, text="Cancelar", bg="#424242", fg=WHITE, font=("Segoe UI", 11),
                       relief="flat", bd=0, highlightthickness=0, padx=14, pady=8, cursor="hand2",
                       activebackground="#555555", activeforeground="white",
@@ -2478,7 +2477,6 @@ def criar_tela():
                   activebackground="#1A6FA8", activeforeground="white",
                   command=lambda: (result.__setitem__(0, True), win.destroy())
                   ).pack(side="left")
-        tk.Frame(f_btn, bg=BG, width=16, highlightthickness=0).pack(side="left")
         tk.Button(f_btn, text="Cancelar", bg="#424242", fg=WHITE,
                   font=("Segoe UI", 12), relief="flat", bd=0, highlightthickness=0,
                   padx=18, pady=10, cursor="hand2",
@@ -2753,7 +2751,6 @@ def criar_tela():
                       relief="flat", bd=0, highlightthickness=0, padx=22, pady=8, cursor="hand2",
                       activebackground="#1A6FA8", activeforeground="white",
                       command=_ok_edit).pack(side="left")
-            tk.Frame(f_eb, bg=BG, width=14, highlightthickness=0).pack(side="left")
             tk.Button(f_eb, text="Cancelar", bg="#424242", fg=WHITE, font=("Segoe UI", 11),
                       relief="flat", bd=0, highlightthickness=0, padx=14, pady=8, cursor="hand2",
                       activebackground="#555555", activeforeground="white",
@@ -2774,7 +2771,6 @@ def criar_tela():
                   padx=24, pady=10, cursor="hand2",
                   activebackground="#1A6FA8", activeforeground="white",
                   command=_confirmar).pack(side="left")
-        tk.Frame(f_btn, bg=BG, width=16, highlightthickness=0).pack(side="left")
         tk.Button(f_btn, text="Cancelar", bg="#424242", fg=WHITE,
                   font=("Segoe UI", 12), relief="flat", bd=0, highlightthickness=0,
                   padx=18, pady=10, cursor="hand2",
