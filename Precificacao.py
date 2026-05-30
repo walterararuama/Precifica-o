@@ -2451,15 +2451,15 @@ def criar_tela():
                     if l: _salvar_grupo_whatsapp(l); refs['grupo'][0]=l; refs['lbl_lo'].set(f"   Lojas  →  {l}")
                 sub.destroy()
             f_eb = tk.Frame(sub, bg=BG, highlightthickness=0)
-            f_eb.pack(pady=(12, 10))
+            f_eb.pack(fill="x", pady=(12, 10))
             tk.Button(f_eb, text="  OK  ", bg=BLUE, fg="white", font=("Segoe UI", 11, "bold"),
                       relief="flat", bd=0, highlightthickness=0, padx=22, pady=8, cursor="hand2",
                       activebackground="#1A6FA8", activeforeground="white",
-                      command=_salvar_edit).pack(side="left")
+                      command=_salvar_edit).pack(side="left", padx=(24, 0))
             tk.Button(f_eb, text="Cancelar", bg="#424242", fg=WHITE, font=("Segoe UI", 11),
                       relief="flat", bd=0, highlightthickness=0, padx=14, pady=8, cursor="hand2",
                       activebackground="#555555", activeforeground="white",
-                      command=sub.destroy).pack(side="left")
+                      command=sub.destroy).pack(side="right", padx=(0, 24))
 
         f_eb2 = tk.Frame(win, bg=BG)
         f_eb2.pack(fill="x", padx=28, pady=(6, 2))
@@ -2470,18 +2470,18 @@ def criar_tela():
                   command=_editar).pack(fill="x")
 
         f_btn = tk.Frame(win, bg=BG, highlightthickness=0)
-        f_btn.pack(pady=(8, 16))
+        f_btn.pack(fill="x", pady=(8, 16))
         tk.Button(f_btn, text="  ENVIAR  ", bg=BLUE, fg="white",
                   font=("Segoe UI", 12, "bold"), relief="flat", bd=0, highlightthickness=0,
                   padx=24, pady=10, cursor="hand2",
                   activebackground="#1A6FA8", activeforeground="white",
                   command=lambda: (result.__setitem__(0, True), win.destroy())
-                  ).pack(side="left")
+                  ).pack(side="left", padx=(28, 0))
         tk.Button(f_btn, text="Cancelar", bg="#424242", fg=WHITE,
                   font=("Segoe UI", 12), relief="flat", bd=0, highlightthickness=0,
                   padx=18, pady=10, cursor="hand2",
                   activebackground="#555555", activeforeground="white",
-                  command=win.destroy).pack(side="left")
+                  command=win.destroy).pack(side="right", padx=(0, 28))
 
         parent.wait_window(win)
         return result[0]
@@ -2746,15 +2746,15 @@ def criar_tela():
                 if l: _salvar_grupo_whatsapp(l); lbl_lo_var.set(f"→  {l}")
                 sub.destroy()
             f_eb = tk.Frame(sub, bg=BG, highlightthickness=0)
-            f_eb.pack(pady=(12, 10))
+            f_eb.pack(fill="x", pady=(12, 10))
             tk.Button(f_eb, text="  OK  ", bg=BLUE, fg="white", font=("Segoe UI", 11, "bold"),
                       relief="flat", bd=0, highlightthickness=0, padx=22, pady=8, cursor="hand2",
                       activebackground="#1A6FA8", activeforeground="white",
-                      command=_ok_edit).pack(side="left")
+                      command=_ok_edit).pack(side="left", padx=(24, 0))
             tk.Button(f_eb, text="Cancelar", bg="#424242", fg=WHITE, font=("Segoe UI", 11),
                       relief="flat", bd=0, highlightthickness=0, padx=14, pady=8, cursor="hand2",
                       activebackground="#555555", activeforeground="white",
-                      command=sub.destroy).pack(side="left")
+                      command=sub.destroy).pack(side="right", padx=(0, 24))
 
         f_alt = tk.Frame(dial, bg=BG)
         f_alt.pack(fill="x", padx=36, pady=(10, 2))
@@ -2765,17 +2765,17 @@ def criar_tela():
                   command=_editar_dest_local).pack(fill="x")
 
         f_btn = tk.Frame(dial, bg=BG, highlightthickness=0)
-        f_btn.pack(pady=(10, 18))
+        f_btn.pack(fill="x", pady=(10, 18))
         tk.Button(f_btn, text="   ENVIAR   ", bg=BLUE, fg="white",
                   font=("Segoe UI", 12, "bold"), relief="flat", bd=0, highlightthickness=0,
                   padx=24, pady=10, cursor="hand2",
                   activebackground="#1A6FA8", activeforeground="white",
-                  command=_confirmar).pack(side="left")
+                  command=_confirmar).pack(side="left", padx=(28, 0))
         tk.Button(f_btn, text="Cancelar", bg="#424242", fg=WHITE,
                   font=("Segoe UI", 12), relief="flat", bd=0, highlightthickness=0,
                   padx=18, pady=10, cursor="hand2",
                   activebackground="#555555", activeforeground="white",
-                  command=dial.destroy).pack(side="left")
+                  command=dial.destroy).pack(side="right", padx=(0, 28))
 
     f_resumo_container = ttkb.Labelframe(root, text=" 📊 DEMONSTRATIVO FINANCEIRO DA CARGA ", bootstyle="primary", padding=5)
     f_resumo_container.pack(fill="x", side="bottom", padx=10, pady=5)
