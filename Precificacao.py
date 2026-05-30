@@ -116,6 +116,22 @@ def _salvar_contato_chefe(nome):
     with open(_CONFIG_LOCAL_INI, "w", encoding="utf-8") as _f:
         cfg.write(_f)
 
+def _copiar_imagem_clipboard(img):
+    import tempfile as _tmp, subprocess as _sp2
+    f = _tmp.NamedTemporaryFile(suffix=".png", delete=False)
+    path = f.name; f.close()
+    img.save(path, "PNG")
+    ps = (
+        "Add-Type -AssemblyName System.Windows.Forms;"
+        "Add-Type -AssemblyName System.Drawing;"
+        f"$i=[System.Drawing.Image]::FromFile('{path.replace(chr(92),chr(47))}');"
+        "[System.Windows.Forms.Clipboard]::SetImage($i);$i.Dispose()"
+    )
+    _sp2.run(["powershell", "-NonInteractive", "-Command", ps],
+             capture_output=True, timeout=12)
+    try: os.unlink(path)
+    except: pass
+
 def _enviar_whatsapp_desktop(grupo):
     import subprocess as _sp, time as _t
     import pyautogui as _ag, pygetwindow as _gw
@@ -127,15 +143,15 @@ def _enviar_whatsapp_desktop(grupo):
         if wins:
             wins[0].activate()
             break
-    _t.sleep(1.0)
-    _ag.press('escape');     _t.sleep(0.2)
-    _ag.press('escape');     _t.sleep(0.2)
-    _ag.hotkey('ctrl','f');  _t.sleep(0.4)
-    _ag.hotkey('ctrl','a');  _ag.write(grupo, interval=0.04)
-    _t.sleep(1.5)
-    _ag.press('down');       _t.sleep(0.3)
-    _ag.press('enter');      _t.sleep(0.6)
-    _ag.hotkey('ctrl','v');  _t.sleep(0.8)
+    _t.sleep(1.2)
+    _ag.press('escape');     _t.sleep(0.3)
+    _ag.press('escape');     _t.sleep(0.3)
+    _ag.hotkey('ctrl','f');  _t.sleep(0.5)
+    _ag.hotkey('ctrl','a');  _ag.write(grupo, interval=0.05)
+    _t.sleep(1.8)
+    _ag.press('down');       _t.sleep(0.4)
+    _ag.press('enter');      _t.sleep(0.8)
+    _ag.hotkey('ctrl','v');  _t.sleep(2.0)
     _ag.press('enter')
 
 # =====================================================================
@@ -1948,22 +1964,6 @@ def criar_tela():
                     except: pass
                 return _IF.load_default()
 
-            def _copiar_imagem_clipboard(img):
-                import tempfile as _tmp, subprocess as _sp
-                f = _tmp.NamedTemporaryFile(suffix=".png", delete=False)
-                path = f.name; f.close()
-                img.save(path, "PNG")
-                ps = (
-                    "Add-Type -AssemblyName System.Windows.Forms;"
-                    "Add-Type -AssemblyName System.Drawing;"
-                    f"$i=[System.Drawing.Image]::FromFile('{path.replace(chr(92),chr(47))}');"
-                    "[System.Windows.Forms.Clipboard]::SetImage($i);$i.Dispose()"
-                )
-                _sp.run(["powershell", "-NonInteractive", "-Command", ps],
-                        capture_output=True, timeout=12)
-                try: os.unlink(path)
-                except: pass
-
             def _gerar_imagem_chefe():
                 from PIL import Image as _Im, ImageDraw as _ID
                 C_BG     = (23,  32,  42)
@@ -2171,8 +2171,15 @@ def criar_tela():
                             return
                         _salvar_grupo_whatsapp(grupo.strip())
                         grupo = grupo.strip()
+                    ok = messagebox.askokcancel(
+                        "Enviar para as Lojas",
+                        f"Enviar aviso de novos preços para o grupo '{grupo}' no WhatsApp?\n\nClique OK para enviar ou Cancelar para abortar.",
+                        parent=modal
+                    )
+                    if not ok:
+                        return
                     _enviar_whatsapp_desktop(grupo)
-                    messagebox.showinfo("Enviado!", f"Aviso enviado para o grupo '{grupo}'.")
+                    messagebox.showinfo("Enviado!", f"Aviso enviado para o grupo '{grupo}'.", parent=modal)
                 except Exception as _ex:
                     messagebox.showerror("Erro", f"Nao foi possivel enviar o aviso:\n{_ex}")
 
@@ -2196,10 +2203,11 @@ def criar_tela():
                 if not ok:
                     return
                 try:
+                    import time as _t2
                     img_lojas = _gerar_imagem_lojas()
                     _copiar_imagem_clipboard(img_lojas)
                     _enviar_whatsapp_desktop(grupo)
-                    import time as _t2; _t2.sleep(1.5)
+                    _t2.sleep(3.0)
                     img_chefe = _gerar_imagem_chefe()
                     _copiar_imagem_clipboard(img_chefe)
                     _enviar_whatsapp_desktop(contato)
@@ -2386,32 +2394,51 @@ def criar_tela():
             messagebox.showwarning("Aviso", "Não há produtos na tela para gerar as imagens.")
             return
 
+        BG   = "#1A2535"
+        BG2  = "#223048"
+        GOLD = "#F1C40F"
+        BLUE = "#2E86C1"
+        WHITE = "#EAECEE"
+        MUTED = "#AEB6BF"
+
         dial = tk.Toplevel(root)
         dial.title("Enviar Avisos")
         dial.resizable(False, False)
         dial.grab_set()
         dial.attributes("-topmost", True)
-        dial.configure(bg="#1C2833")
-        W_d, H_d = 340, 210
+        dial.configure(bg=BG)
+        W_d, H_d = 480, 290
         dial.geometry(f"{W_d}x{H_d}+{root.winfo_rootx()+(root.winfo_width()-W_d)//2}+{root.winfo_rooty()+(root.winfo_height()-H_d)//2}")
+        try:
+            dial.iconbitmap(_get_recurso("icone.ico"))
+        except Exception:
+            pass
 
-        tk.Label(dial, text="Enviar avisos via WhatsApp", bg="#1C2833",
-                 fg="#F1C40F", font=("Segoe UI", 12, "bold")).pack(pady=(18, 4))
-        tk.Label(dial, text="Selecione os destinatários:", bg="#1C2833",
-                 fg="#BDC3C7", font=("Segoe UI", 10)).pack(pady=(0, 8))
+        # Faixa dourada no topo
+        tk.Frame(dial, bg=GOLD, height=4).pack(fill="x")
+
+        tk.Label(dial, text="ENVIAR AVISOS VIA WHATSAPP", bg=BG,
+                 fg=GOLD, font=("Segoe UI", 14, "bold")).pack(pady=(18, 4))
+        tk.Label(dial, text="Selecione os destinatários:", bg=BG,
+                 fg=MUTED, font=("Segoe UI", 11)).pack(pady=(0, 10))
 
         var_ch = tk.BooleanVar(value=True)
         var_lo = tk.BooleanVar(value=True)
-        f_cb = tk.Frame(dial, bg="#1C2833")
-        f_cb.pack()
-        tk.Checkbutton(f_cb, text="CHEFE (resumo de precificação)",
-                       variable=var_ch, bg="#1C2833", fg="white",
-                       selectcolor="#2C3E50", activebackground="#1C2833",
-                       font=("Segoe UI", 10)).pack(anchor="w", pady=2)
-        tk.Checkbutton(f_cb, text="LOJAS (aviso de novos preços)",
-                       variable=var_lo, bg="#1C2833", fg="white",
-                       selectcolor="#2C3E50", activebackground="#1C2833",
-                       font=("Segoe UI", 10)).pack(anchor="w", pady=2)
+
+        f_cb = tk.Frame(dial, bg=BG2, relief="flat", bd=0)
+        f_cb.pack(padx=40, pady=4, fill="x")
+
+        tk.Checkbutton(f_cb, text="  CHEFE  —  resumo de precificação",
+                       variable=var_ch, bg=BG2, fg=WHITE,
+                       activebackground=BG2, activeforeground=WHITE,
+                       selectcolor=BLUE, highlightthickness=0,
+                       font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=16, pady=10)
+        tk.Frame(f_cb, bg="#2C3E50", height=1).pack(fill="x", padx=16)
+        tk.Checkbutton(f_cb, text="  LOJAS  —  aviso de novos preços",
+                       variable=var_lo, bg=BG2, fg=WHITE,
+                       activebackground=BG2, activeforeground=WHITE,
+                       selectcolor=BLUE, highlightthickness=0,
+                       font=("Segoe UI", 12, "bold")).pack(anchor="w", padx=16, pady=10)
 
         def _get_font_pil_local(size, bold=False):
             from PIL import ImageFont as _IF
@@ -2570,7 +2597,7 @@ def criar_tela():
                     img_lo = _gerar_img_lojas_local()
                     _copiar_imagem_clipboard(img_lo)
                     _enviar_whatsapp_desktop(_ler_grupo_whatsapp())
-                    if envia_chefe: _t2.sleep(1.5)
+                    if envia_chefe: _t2.sleep(3.0)
                 if envia_chefe:
                     img_ch = _gerar_img_chefe_local()
                     _copiar_imagem_clipboard(img_ch)
@@ -2579,14 +2606,18 @@ def criar_tela():
             except Exception as _ex:
                 messagebox.showerror("Erro", f"Erro ao enviar:\n{_ex}")
 
-        f_btn = tk.Frame(dial, bg="#1C2833")
-        f_btn.pack(pady=(12, 10))
-        tk.Button(f_btn, text="OK", bg="#1A5276", fg="white", font=("Segoe UI", 10, "bold"),
-                  relief="flat", padx=20, pady=6, cursor="hand2",
-                  command=_confirmar).pack(side="left", padx=6)
-        tk.Button(f_btn, text="Cancelar", bg="#424242", fg="white", font=("Segoe UI", 10),
-                  relief="flat", padx=14, pady=6, cursor="hand2",
-                  command=dial.destroy).pack(side="left", padx=6)
+        f_btn = tk.Frame(dial, bg=BG)
+        f_btn.pack(pady=(14, 16))
+        tk.Button(f_btn, text="   OK   ", bg=BLUE, fg="white",
+                  font=("Segoe UI", 12, "bold"),
+                  relief="flat", padx=24, pady=10, cursor="hand2",
+                  activebackground="#1A6FA8", activeforeground="white",
+                  command=_confirmar).pack(side="left", padx=10)
+        tk.Button(f_btn, text="Cancelar", bg="#424242", fg=WHITE,
+                  font=("Segoe UI", 12),
+                  relief="flat", padx=18, pady=10, cursor="hand2",
+                  activebackground="#555555", activeforeground="white",
+                  command=dial.destroy).pack(side="left", padx=10)
 
     f_resumo_container = ttkb.Labelframe(root, text=" 📊 DEMONSTRATIVO FINANCEIRO DA CARGA ", bootstyle="primary", padding=5)
     f_resumo_container.pack(fill="x", side="bottom", padx=10, pady=5)
