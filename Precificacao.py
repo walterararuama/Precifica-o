@@ -2129,33 +2129,14 @@ def criar_tela():
                 d.text((PAD, y+14), "Boas vendas!", fill=C_MUTED, font=fF)
                 return img
 
-            def _garantir_contato_chefe():
-                contato = _ler_contato_chefe()
-                if not contato:
-                    from tkinter import simpledialog as _sd
-                    contato = _sd.askstring("WhatsApp", "Nome exato do contato do chefe no WhatsApp\n(ex: Edson Cordeiro):", parent=modal)
-                    if not contato:
-                        return None
-                    _salvar_contato_chefe(contato.strip())
-                    contato = contato.strip()
-                return contato
-
             def copiar_resumo_area_transferencia():
                 try:
                     img = _gerar_imagem_chefe()
                     _copiar_imagem_clipboard(img)
-                    contato = _garantir_contato_chefe()
-                    if not contato:
+                    if not _dialogo_whatsapp_confirmar(modal, para_chefe=True):
                         return
-                    ok = messagebox.askokcancel(
-                        "Enviar para o Chefe",
-                        f"Enviar resumo de precificação para '{contato}' no WhatsApp?\n\nClique OK para enviar ou Cancelar para abortar.",
-                        parent=modal
-                    )
-                    if not ok:
-                        return
-                    _enviar_whatsapp_desktop(contato)
-                    messagebox.showinfo("Enviado!", f"Resumo enviado para '{contato}'.", parent=modal)
+                    _enviar_whatsapp_desktop(_ler_contato_chefe())
+                    messagebox.showinfo("Enviado!", f"Resumo enviado para '{_ler_contato_chefe()}'.", parent=modal)
                 except Exception as _ex:
                     messagebox.showerror("Erro", f"Nao foi possivel enviar o resumo:\n{_ex}")
 
@@ -2163,55 +2144,26 @@ def criar_tela():
                 try:
                     img = _gerar_imagem_lojas()
                     _copiar_imagem_clipboard(img)
-                    grupo = _ler_grupo_whatsapp()
-                    if not grupo:
-                        from tkinter import simpledialog as _sd
-                        grupo = _sd.askstring("WhatsApp", "Nome exato do grupo para enviar o aviso:", parent=root)
-                        if not grupo:
-                            return
-                        _salvar_grupo_whatsapp(grupo.strip())
-                        grupo = grupo.strip()
-                    ok = messagebox.askokcancel(
-                        "Enviar para as Lojas",
-                        f"Enviar aviso de novos preços para o grupo '{grupo}' no WhatsApp?\n\nClique OK para enviar ou Cancelar para abortar.",
-                        parent=modal
-                    )
-                    if not ok:
+                    if not _dialogo_whatsapp_confirmar(modal, para_lojas=True):
                         return
-                    _enviar_whatsapp_desktop(grupo)
-                    messagebox.showinfo("Enviado!", f"Aviso enviado para o grupo '{grupo}'.", parent=modal)
+                    _enviar_whatsapp_desktop(_ler_grupo_whatsapp())
+                    messagebox.showinfo("Enviado!", f"Aviso enviado para '{_ler_grupo_whatsapp()}'.", parent=modal)
                 except Exception as _ex:
                     messagebox.showerror("Erro", f"Nao foi possivel enviar o aviso:\n{_ex}")
 
             def enviar_lojas_e_chefe():
-                grupo = _ler_grupo_whatsapp()
-                if not grupo:
-                    from tkinter import simpledialog as _sd
-                    grupo = _sd.askstring("WhatsApp", "Nome exato do grupo das lojas:", parent=modal)
-                    if not grupo:
-                        return
-                    _salvar_grupo_whatsapp(grupo.strip())
-                    grupo = grupo.strip()
-                contato = _garantir_contato_chefe()
-                if not contato:
-                    return
-                ok = messagebox.askokcancel(
-                    "Enviar para Lojas e Chefe",
-                    f"Serão enviadas 2 imagens:\n\n• Grupo '{grupo}' (aviso de lojas)\n• '{contato}' (resumo do chefe)\n\nDeseja continuar?",
-                    parent=modal
-                )
-                if not ok:
+                if not _dialogo_whatsapp_confirmar(modal, para_chefe=True, para_lojas=True):
                     return
                 try:
                     import time as _t2
                     img_lojas = _gerar_imagem_lojas()
                     _copiar_imagem_clipboard(img_lojas)
-                    _enviar_whatsapp_desktop(grupo)
+                    _enviar_whatsapp_desktop(_ler_grupo_whatsapp())
                     _t2.sleep(3.0)
                     img_chefe = _gerar_imagem_chefe()
                     _copiar_imagem_clipboard(img_chefe)
-                    _enviar_whatsapp_desktop(contato)
-                    messagebox.showinfo("Enviado!", f"Aviso enviado para '{grupo}' e resumo para '{contato}'.", parent=modal)
+                    _enviar_whatsapp_desktop(_ler_contato_chefe())
+                    messagebox.showinfo("Enviado!", "Imagens enviadas para as lojas e para o chefe.", parent=modal)
                 except Exception as _ex:
                     messagebox.showerror("Erro", f"Erro ao enviar:\n{_ex}")
 
@@ -2389,6 +2341,151 @@ def criar_tela():
         else:
             messagebox.showerror("Erro ao Salvar", mensagem)
 
+    # ------------------------------------------------------------------
+    # Helper reutilizável de confirmação de envio WhatsApp
+    # ------------------------------------------------------------------
+    def _dialogo_whatsapp_confirmar(parent, para_chefe=False, para_lojas=False):
+        """Abre diálogo de confirmação de envio. Retorna True se ENVIAR clicado."""
+        BG="#1A2535"; BG2="#223048"; BG3="#1B3A5C"
+        GOLD="#F1C40F"; BLUE="#2471A3"; WHITE="#EAECEE"; MUTED="#AEB6BF"
+
+        # Garante destinatários configurados antes de abrir o diálogo
+        if para_lojas and not _ler_grupo_whatsapp():
+            from tkinter import simpledialog as _sd
+            g = _sd.askstring("WhatsApp", "Nome exato do grupo das lojas (ex: Ajuste de Preços):", parent=parent)
+            if not g: return False
+            _salvar_grupo_whatsapp(g.strip())
+        if para_chefe and not _ler_contato_chefe():
+            from tkinter import simpledialog as _sd
+            c = _sd.askstring("WhatsApp", "Nome do contato do chefe no WhatsApp\n(ex: Edson Cordeiro):", parent=parent)
+            if not c: return False
+            _salvar_contato_chefe(c.strip())
+
+        result = [False]
+        n_linhas = (1 if para_chefe else 0) + (1 if para_lojas else 0)
+        H_w = 240 + n_linhas * 30
+        win = tk.Toplevel(parent)
+        win.title("Confirmar Envio")
+        win.resizable(False, False)
+        win.grab_set()
+        win.configure(bg=BG)
+        win.option_add("*Background", BG)
+        win.option_add("*Foreground", WHITE)
+        try: win.iconbitmap(_get_recurso("icone.ico"))
+        except: pass
+        W_w = 460
+        win.geometry(f"{W_w}x{H_w}+{parent.winfo_rootx()+(parent.winfo_width()-W_w)//2}+{parent.winfo_rooty()+(parent.winfo_height()-H_w)//2}")
+
+        tk.Frame(win, bg=GOLD, height=5).pack(fill="x")
+
+        # Título dentro de Frame para evitar fundo branco no Windows
+        f_t = tk.Frame(win, bg=BG)
+        f_t.pack(fill="x")
+        tk.Label(f_t, text="CONFIRMAR ENVIO VIA WHATSAPP", bg=BG, fg=GOLD,
+                 font=("Segoe UI", 13, "bold")).pack(pady=(16, 6))
+
+        # Info dos destinatários
+        refs = {}
+        f_info = tk.Frame(win, bg=BG2)
+        f_info.pack(fill="x", padx=28, pady=(4, 4))
+        if para_lojas:
+            refs['grupo'] = [_ler_grupo_whatsapp()]
+            refs['lbl_lo'] = tk.StringVar(value=f"   Lojas  →  {refs['grupo'][0]}")
+            tk.Label(f_info, textvariable=refs['lbl_lo'], bg=BG2, fg=WHITE,
+                     font=("Segoe UI", 11), anchor="w", bd=0, highlightthickness=0
+                     ).pack(fill="x", padx=14, pady=(10, 4))
+        if para_chefe:
+            refs['chefe'] = [_ler_contato_chefe()]
+            refs['lbl_ch'] = tk.StringVar(value=f"   Chefe  →  {refs['chefe'][0]}")
+            tk.Label(f_info, textvariable=refs['lbl_ch'], bg=BG2, fg=WHITE,
+                     font=("Segoe UI", 11), anchor="w", bd=0, highlightthickness=0
+                     ).pack(fill="x", padx=14, pady=(4, 10))
+
+        def _editar():
+            sub = tk.Toplevel(win)
+            sub.title("Editar Destinatários")
+            sub.resizable(False, False)
+            sub.grab_set()
+            sub.configure(bg=BG)
+            sub.option_add("*Background", BG)
+            sub.option_add("*Foreground", WHITE)
+            try: sub.iconbitmap(_get_recurso("icone.ico"))
+            except: pass
+            Hs = 160 + n_linhas * 60
+            Ws = 420
+            sub.geometry(f"{Ws}x{Hs}+{win.winfo_rootx()+(win.winfo_width()-Ws)//2}+{win.winfo_rooty()+(win.winfo_height()-Hs)//2}")
+            tk.Frame(sub, bg=GOLD, height=4).pack(fill="x")
+            f_st = tk.Frame(sub, bg=BG)
+            f_st.pack(fill="x")
+            tk.Label(f_st, text="EDITAR DESTINATÁRIOS", bg=BG, fg=GOLD,
+                     font=("Segoe UI", 12, "bold"), bd=0).pack(pady=(14, 10))
+            f_form = tk.Frame(sub, bg=BG)
+            f_form.pack(padx=28, fill="x")
+            entries = {}
+            row = 0
+            if para_chefe:
+                tk.Label(f_form, text="Contato do chefe:", bg=BG, fg=MUTED,
+                         font=("Segoe UI", 10), bd=0).grid(row=row, column=0, sticky="w", pady=(0,2))
+                row += 1
+                ent = tk.Entry(f_form, font=("Segoe UI", 11), bg=BG3, fg=WHITE,
+                               insertbackground=WHITE, relief="flat", bd=4)
+                ent.grid(row=row, column=0, sticky="ew", ipady=7, pady=(0, 8))
+                ent.insert(0, _ler_contato_chefe() or "")
+                entries['chefe'] = ent; row += 1
+            if para_lojas:
+                tk.Label(f_form, text="Grupo das lojas:", bg=BG, fg=MUTED,
+                         font=("Segoe UI", 10), bd=0).grid(row=row, column=0, sticky="w", pady=(0,2))
+                row += 1
+                ent = tk.Entry(f_form, font=("Segoe UI", 11), bg=BG3, fg=WHITE,
+                               insertbackground=WHITE, relief="flat", bd=4)
+                ent.grid(row=row, column=0, sticky="ew", ipady=7)
+                ent.insert(0, _ler_grupo_whatsapp() or "")
+                entries['lojas'] = ent; row += 1
+            f_form.columnconfigure(0, weight=1)
+            def _salvar_edit():
+                if 'chefe' in entries:
+                    c = entries['chefe'].get().strip()
+                    if c: _salvar_contato_chefe(c); refs['chefe'][0]=c; refs['lbl_ch'].set(f"   Chefe  →  {c}")
+                if 'lojas' in entries:
+                    l = entries['lojas'].get().strip()
+                    if l: _salvar_grupo_whatsapp(l); refs['grupo'][0]=l; refs['lbl_lo'].set(f"   Lojas  →  {l}")
+                sub.destroy()
+            f_eb = tk.Frame(sub, bg=BG)
+            f_eb.pack(pady=(12, 10))
+            tk.Button(f_eb, text="  OK  ", bg=BLUE, fg="white", font=("Segoe UI", 11, "bold"),
+                      relief="flat", bd=0, padx=22, pady=8, cursor="hand2",
+                      activebackground="#1A6FA8", activeforeground="white",
+                      command=_salvar_edit).pack(side="left", padx=8)
+            tk.Button(f_eb, text="Cancelar", bg="#424242", fg=WHITE, font=("Segoe UI", 11),
+                      relief="flat", bd=0, padx=14, pady=8, cursor="hand2",
+                      activebackground="#555555", activeforeground="white",
+                      command=sub.destroy).pack(side="left", padx=8)
+
+        f_eb2 = tk.Frame(win, bg=BG)
+        f_eb2.pack(fill="x", padx=28, pady=(6, 2))
+        tk.Button(f_eb2, text="✏  EDITAR DESTINATÁRIOS", bg=BG3, fg=WHITE,
+                  font=("Segoe UI", 10), relief="flat", bd=0,
+                  padx=12, pady=7, cursor="hand2",
+                  activebackground="#1A4A72", activeforeground=WHITE,
+                  command=_editar).pack(fill="x")
+
+        f_btn = tk.Frame(win, bg=BG)
+        f_btn.pack(pady=(8, 16))
+        tk.Button(f_btn, text="  ENVIAR  ", bg=BLUE, fg="white",
+                  font=("Segoe UI", 12, "bold"), relief="flat", bd=0,
+                  padx=24, pady=10, cursor="hand2",
+                  activebackground="#1A6FA8", activeforeground="white",
+                  command=lambda: (result.__setitem__(0, True), win.destroy())
+                  ).pack(side="left", padx=10)
+        tk.Button(f_btn, text="Cancelar", bg="#424242", fg=WHITE,
+                  font=("Segoe UI", 12), relief="flat", bd=0,
+                  padx=18, pady=10, cursor="hand2",
+                  activebackground="#555555", activeforeground="white",
+                  command=win.destroy).pack(side="left", padx=10)
+
+        parent.wait_window(win)
+        return result[0]
+
     def abrir_dialogo_enviar_avisos():
         if not linhas_nota or not any(r["var_cod"].get().strip() for r in linhas_nota):
             messagebox.showwarning("Aviso", "Não há produtos na tela para gerar as imagens.")
@@ -2396,60 +2493,57 @@ def criar_tela():
 
         BG    = "#1A2535"
         BG2   = "#223048"
-        BG3   = "#1B3A5C"
         GOLD  = "#F1C40F"
         BLUE  = "#2471A3"
-        BLUE_ON = "#1A6FA8"
         WHITE = "#EAECEE"
         MUTED = "#AEB6BF"
-        GREEN = "#1E8449"
 
         dial = tk.Toplevel(root)
         dial.title("Enviar Avisos")
         dial.resizable(False, False)
         dial.grab_set()
-        dial.attributes("-topmost", True)
         dial.configure(bg=BG)
-        W_d, H_d = 560, 390
+        # option_add: define fundo padrão para TODOS os widgets filhos (evita branco no Windows)
+        dial.option_add("*Background", BG)
+        dial.option_add("*Foreground", WHITE)
+        W_d, H_d = 560, 400
         dial.geometry(f"{W_d}x{H_d}+{root.winfo_rootx()+(root.winfo_width()-W_d)//2}+{root.winfo_rooty()+(root.winfo_height()-H_d)//2}")
         try:
             dial.iconbitmap(_get_recurso("icone.ico"))
         except Exception:
             pass
 
-        # Faixa dourada no topo
+        # Faixa dourada
         tk.Frame(dial, bg=GOLD, height=5).pack(fill="x")
 
-        tk.Label(dial, text="ENVIAR AVISOS VIA WHATSAPP", bg=BG,
-                 fg=GOLD, font=("Segoe UI", 15, "bold")).pack(pady=(20, 4))
-        tk.Label(dial, text="Selecione os destinatários:", bg=BG,
-                 fg=MUTED, font=("Segoe UI", 11)).pack(pady=(0, 12))
+        # Título e subtítulo dentro de Frame intermediário (evita fundo branco direto no Toplevel)
+        f_hdr = tk.Frame(dial, bg=BG)
+        f_hdr.pack(fill="x")
+        tk.Label(f_hdr, text="ENVIAR AVISOS VIA WHATSAPP", bg=BG,
+                 fg=GOLD, font=("Segoe UI", 15, "bold"), bd=0).pack(pady=(20, 4))
+        tk.Label(f_hdr, text="Selecione os destinatários:", bg=BG,
+                 fg=MUTED, font=("Segoe UI", 11), bd=0).pack(pady=(0, 12))
 
         var_ch = tk.BooleanVar(value=True)
         var_lo = tk.BooleanVar(value=True)
 
-        # Lê nomes salvos para exibir
         nome_chefe = _ler_contato_chefe() or "não configurado"
         nome_lojas = _ler_grupo_whatsapp() or "não configurado"
 
         f_opts = tk.Frame(dial, bg=BG2)
         f_opts.pack(padx=36, fill="x")
 
-        # Botões toggle — sem indicador nativo (evita caixa branca do Windows)
-        def _make_toggle(parent, var, texto_linha1, texto_linha2):
+        def _make_toggle(parent, var, rotulo, nome_dest):
             frm = tk.Frame(parent, bg=BG2, cursor="hand2")
-            frm.pack(fill="x", padx=0, pady=0)
-            # Canvas para o indicador manual
+            frm.pack(fill="x")
             cv = tk.Canvas(frm, width=26, height=26, bg=BG2, highlightthickness=0)
             cv.pack(side="left", padx=(16, 10), pady=14)
-            lbl1 = tk.Label(frm, text=texto_linha1, bg=BG2, fg=WHITE,
-                            font=("Segoe UI", 12, "bold"), anchor="w")
-            lbl1.pack(side="left", anchor="w")
-            # nome do destinatário
-            lbl2_var = tk.StringVar(value=texto_linha2)
-            lbl2 = tk.Label(frm, textvariable=lbl2_var, bg=BG2, fg=MUTED,
-                            font=("Segoe UI", 10), anchor="w")
-            lbl2.pack(side="left", padx=(6, 0), anchor="w")
+            tk.Label(frm, text=rotulo, bg=BG2, fg=WHITE,
+                     font=("Segoe UI", 12, "bold"), anchor="w", bd=0).pack(side="left")
+            lbl_var = tk.StringVar(value=f"→  {nome_dest}")
+            lbl_dest = tk.Label(frm, textvariable=lbl_var, bg=BG2, fg=MUTED,
+                                font=("Segoe UI", 10), anchor="w", bd=0)
+            lbl_dest.pack(side="left", padx=(6, 0))
 
             def _desenhar():
                 cv.delete("all")
@@ -2464,16 +2558,15 @@ def criar_tela():
                 var.set(not var.get())
                 _desenhar()
 
-            cv.bind("<Button-1>", _toggle)
-            lbl1.bind("<Button-1>", _toggle)
-            lbl2.bind("<Button-1>", _toggle)
-            frm.bind("<Button-1>", _toggle)
+            for w in (cv, frm, lbl_dest):
+                w.bind("<Button-1>", _toggle)
+            # lbl rotulo está num Frame fill, precisa do bind no frm
             _desenhar()
-            return frm, lbl2_var
+            return lbl_var
 
-        frm_ch, lbl_ch_var = _make_toggle(f_opts, var_ch, "CHEFE", f"→  {nome_chefe}")
+        lbl_ch_var = _make_toggle(f_opts, var_ch, "CHEFE", nome_chefe)
         tk.Frame(f_opts, bg="#2C3E50", height=1).pack(fill="x", padx=16)
-        frm_lo, lbl_lo_var = _make_toggle(f_opts, var_lo, "LOJAS", f"→  {nome_lojas}")
+        lbl_lo_var = _make_toggle(f_opts, var_lo, "LOJAS", nome_lojas)
 
         def _get_font_pil_local(size, bold=False):
             from PIL import ImageFont as _IF
@@ -2599,31 +2692,7 @@ def criar_tela():
             if not envia_chefe and not envia_lojas:
                 messagebox.showwarning("Aviso", "Selecione ao menos um destinatário.", parent=dial)
                 return
-            msgs = []
-            if envia_lojas:
-                grupo = _ler_grupo_whatsapp()
-                if not grupo:
-                    from tkinter import simpledialog as _sd
-                    grupo = _sd.askstring("WhatsApp", "Nome exato do grupo das lojas:", parent=dial)
-                    if not grupo:
-                        return
-                    _salvar_grupo_whatsapp(grupo.strip())
-                    grupo = grupo.strip()
-                msgs.append(f"• Grupo '{grupo}' (aviso de lojas)")
-            if envia_chefe:
-                contato = _ler_contato_chefe()
-                if not contato:
-                    from tkinter import simpledialog as _sd
-                    contato = _sd.askstring("WhatsApp", "Nome exato do contato do chefe:\n(ex: Edson Cordeiro)", parent=dial)
-                    if not contato:
-                        return
-                    _salvar_contato_chefe(contato.strip())
-                    contato = contato.strip()
-                msgs.append(f"• '{contato}' (resumo do chefe)")
-            ok = messagebox.askokcancel("Confirmar envio",
-                                        "Serão enviados:\n\n" + "\n".join(msgs) + "\n\nDeseja continuar?",
-                                        parent=dial)
-            if not ok:
+            if not _dialogo_whatsapp_confirmar(dial, para_chefe=envia_chefe, para_lojas=envia_lojas):
                 return
             dial.destroy()
             try:
@@ -2641,79 +2710,69 @@ def criar_tela():
             except Exception as _ex:
                 messagebox.showerror("Erro", f"Erro ao enviar:\n{_ex}")
 
-        def _alterar_destinatarios():
+        def _editar_dest_local():
+            BG3 = "#1B3A5C"
             sub = tk.Toplevel(dial)
-            sub.title("Alterar Destinatários")
+            sub.title("Editar Destinatários")
             sub.resizable(False, False)
             sub.grab_set()
-            sub.attributes("-topmost", True)
             sub.configure(bg=BG)
-            Ws, Hs = 460, 260
-            sub.geometry(f"{Ws}x{Hs}+{dial.winfo_rootx()+(dial.winfo_width()-Ws)//2}+{dial.winfo_rooty()+(dial.winfo_height()-Hs)//2}")
+            sub.option_add("*Background", BG)
+            sub.option_add("*Foreground", WHITE)
             try: sub.iconbitmap(_get_recurso("icone.ico"))
             except: pass
-
+            sub.geometry(f"430x240+{dial.winfo_rootx()+(dial.winfo_width()-430)//2}+{dial.winfo_rooty()+(dial.winfo_height()-240)//2}")
             tk.Frame(sub, bg=GOLD, height=4).pack(fill="x")
-            tk.Label(sub, text="ALTERAR DESTINATÁRIOS", bg=BG, fg=GOLD,
-                     font=("Segoe UI", 13, "bold")).pack(pady=(16, 12))
-
-            f_form = tk.Frame(sub, bg=BG)
-            f_form.pack(padx=30, fill="x")
-
+            f_st = tk.Frame(sub, bg=BG); f_st.pack(fill="x")
+            tk.Label(f_st, text="EDITAR DESTINATÁRIOS", bg=BG, fg=GOLD,
+                     font=("Segoe UI", 12, "bold"), bd=0).pack(pady=(14, 10))
+            f_form = tk.Frame(sub, bg=BG); f_form.pack(padx=28, fill="x")
             tk.Label(f_form, text="Contato do chefe:", bg=BG, fg=MUTED,
-                     font=("Segoe UI", 10)).grid(row=0, column=0, sticky="w", pady=(0, 4))
-            ent_chefe = tk.Entry(f_form, font=("Segoe UI", 11), bg=BG3, fg=WHITE,
-                                 insertbackground=WHITE, relief="flat", bd=4)
-            ent_chefe.grid(row=1, column=0, sticky="ew", ipady=6, pady=(0, 12))
-            ent_chefe.insert(0, _ler_contato_chefe() or "")
-
+                     font=("Segoe UI", 10), bd=0).grid(row=0, column=0, sticky="w", pady=(0,2))
+            ent_ch = tk.Entry(f_form, font=("Segoe UI", 11), bg=BG3, fg=WHITE,
+                              insertbackground=WHITE, relief="flat", bd=4)
+            ent_ch.grid(row=1, column=0, sticky="ew", ipady=7, pady=(0, 8))
+            ent_ch.insert(0, _ler_contato_chefe() or "")
             tk.Label(f_form, text="Grupo das lojas:", bg=BG, fg=MUTED,
-                     font=("Segoe UI", 10)).grid(row=2, column=0, sticky="w", pady=(0, 4))
-            ent_lojas = tk.Entry(f_form, font=("Segoe UI", 11), bg=BG3, fg=WHITE,
-                                 insertbackground=WHITE, relief="flat", bd=4)
-            ent_lojas.grid(row=3, column=0, sticky="ew", ipady=6)
-            ent_lojas.insert(0, _ler_grupo_whatsapp() or "")
+                     font=("Segoe UI", 10), bd=0).grid(row=2, column=0, sticky="w", pady=(0,2))
+            ent_lo = tk.Entry(f_form, font=("Segoe UI", 11), bg=BG3, fg=WHITE,
+                              insertbackground=WHITE, relief="flat", bd=4)
+            ent_lo.grid(row=3, column=0, sticky="ew", ipady=7)
+            ent_lo.insert(0, _ler_grupo_whatsapp() or "")
             f_form.columnconfigure(0, weight=1)
-
-            def _salvar_alt():
-                c = ent_chefe.get().strip()
-                l = ent_lojas.get().strip()
-                if c: _salvar_contato_chefe(c)
-                if l: _salvar_grupo_whatsapp(l)
-                # Atualiza os labels no diálogo principal
-                lbl_ch_var.set(f"→  {c or _ler_contato_chefe() or 'não configurado'}")
-                lbl_lo_var.set(f"→  {l or _ler_grupo_whatsapp() or 'não configurado'}")
+            def _ok_edit():
+                c = ent_ch.get().strip(); l = ent_lo.get().strip()
+                if c: _salvar_contato_chefe(c); lbl_ch_var.set(f"→  {c}")
+                if l: _salvar_grupo_whatsapp(l); lbl_lo_var.set(f"→  {l}")
                 sub.destroy()
-
-            f_sbtn = tk.Frame(sub, bg=BG)
-            f_sbtn.pack(pady=(14, 10))
-            tk.Button(f_sbtn, text="  SALVAR  ", bg=GREEN, fg="white",
-                      font=("Segoe UI", 11, "bold"), relief="flat",
-                      padx=20, pady=8, cursor="hand2",
-                      activebackground="#239B56", activeforeground="white",
-                      command=_salvar_alt).pack(side="left", padx=8)
-            tk.Button(f_sbtn, text="Cancelar", bg="#424242", fg=WHITE,
-                      font=("Segoe UI", 11), relief="flat",
-                      padx=14, pady=8, cursor="hand2",
+            f_eb = tk.Frame(sub, bg=BG); f_eb.pack(pady=(12, 10))
+            tk.Button(f_eb, text="  OK  ", bg=BLUE, fg="white", font=("Segoe UI", 11, "bold"),
+                      relief="flat", bd=0, padx=22, pady=8, cursor="hand2",
+                      activebackground="#1A6FA8", activeforeground="white",
+                      command=_ok_edit).pack(side="left", padx=8)
+            tk.Button(f_eb, text="Cancelar", bg="#424242", fg=WHITE, font=("Segoe UI", 11),
+                      relief="flat", bd=0, padx=14, pady=8, cursor="hand2",
                       activebackground="#555555", activeforeground="white",
                       command=sub.destroy).pack(side="left", padx=8)
 
-        # Botão alterar destinatários
-        tk.Button(dial, text="✏  ALTERAR DESTINATÁRIOS", bg=BG3, fg=WHITE,
-                  font=("Segoe UI", 10), relief="flat", padx=12, pady=7,
-                  cursor="hand2", activebackground="#1A4A72", activeforeground=WHITE,
-                  command=_alterar_destinatarios).pack(pady=(10, 2))
+        f_alt = tk.Frame(dial, bg=BG)
+        f_alt.pack(fill="x", padx=36, pady=(10, 2))
+        tk.Button(f_alt, text="✏  ALTERAR DESTINATÁRIOS", bg="#1B3A5C", fg=WHITE,
+                  font=("Segoe UI", 10), relief="flat", bd=0,
+                  padx=12, pady=8, cursor="hand2",
+                  activebackground="#1A4A72", activeforeground=WHITE,
+                  command=_editar_dest_local).pack(fill="x")
 
         f_btn = tk.Frame(dial, bg=BG)
         f_btn.pack(pady=(10, 18))
         tk.Button(f_btn, text="   ENVIAR   ", bg=BLUE, fg="white",
-                  font=("Segoe UI", 12, "bold"),
-                  relief="flat", padx=24, pady=10, cursor="hand2",
-                  activebackground=BLUE_ON, activeforeground="white",
+                  font=("Segoe UI", 12, "bold"), relief="flat", bd=0,
+                  padx=24, pady=10, cursor="hand2",
+                  activebackground="#1A6FA8", activeforeground="white",
                   command=_confirmar).pack(side="left", padx=10)
         tk.Button(f_btn, text="Cancelar", bg="#424242", fg=WHITE,
-                  font=("Segoe UI", 12),
-                  relief="flat", padx=18, pady=10, cursor="hand2",
+                  font=("Segoe UI", 12), relief="flat", bd=0,
+                  padx=18, pady=10, cursor="hand2",
                   activebackground="#555555", activeforeground="white",
                   command=dial.destroy).pack(side="left", padx=10)
 
