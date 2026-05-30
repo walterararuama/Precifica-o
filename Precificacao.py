@@ -2450,16 +2450,18 @@ def criar_tela():
                     l = entries['lojas'].get().strip()
                     if l: _salvar_grupo_whatsapp(l); refs['grupo'][0]=l; refs['lbl_lo'].set(f"   Lojas  →  {l}")
                 sub.destroy()
-            f_eb = tk.Frame(sub, bg=BG, highlightthickness=0)
-            f_eb.pack(fill="x", pady=(12, 10))
-            tk.Button(f_eb, text="  OK  ", bg=BLUE, fg="white", font=("Segoe UI", 11, "bold"),
-                      relief="flat", bd=0, highlightthickness=0, padx=22, pady=8, cursor="hand2",
-                      activebackground="#1A6FA8", activeforeground="white",
-                      command=_salvar_edit).pack(side="left", padx=(24, 0))
-            tk.Button(f_eb, text="Cancelar", bg="#424242", fg=WHITE, font=("Segoe UI", 11),
-                      relief="flat", bd=0, highlightthickness=0, padx=14, pady=8, cursor="hand2",
-                      activebackground="#555555", activeforeground="white",
-                      command=sub.destroy).pack(side="right", padx=(0, 24))
+            cv_eb = tk.Canvas(sub, bg=BG, highlightthickness=0, height=52)
+            cv_eb.pack(fill="x", pady=(12, 10))
+            _b_ok = tk.Button(cv_eb, text="  OK  ", bg=BLUE, fg="white", font=("Segoe UI", 11, "bold"),
+                              relief="flat", bd=0, highlightthickness=0, padx=22, pady=8, cursor="hand2",
+                              activebackground="#1A6FA8", activeforeground="white",
+                              command=_salvar_edit)
+            _b_ca = tk.Button(cv_eb, text="Cancelar", bg="#424242", fg=WHITE, font=("Segoe UI", 11),
+                              relief="flat", bd=0, highlightthickness=0, padx=14, pady=8, cursor="hand2",
+                              activebackground="#555555", activeforeground="white",
+                              command=sub.destroy)
+            cv_eb.create_window(24, 26, window=_b_ok, anchor="w")
+            cv_eb.create_window(Ws - 24, 26, window=_b_ca, anchor="e")
 
         f_eb2 = tk.Frame(win, bg=BG)
         f_eb2.pack(fill="x", padx=28, pady=(6, 2))
@@ -2469,19 +2471,20 @@ def criar_tela():
                   activebackground="#1A4A72", activeforeground=WHITE,
                   command=_editar).pack(fill="x")
 
-        f_btn = tk.Frame(win, bg=BG, highlightthickness=0)
-        f_btn.pack(fill="x", pady=(8, 16))
-        tk.Button(f_btn, text="  ENVIAR  ", bg=BLUE, fg="white",
-                  font=("Segoe UI", 12, "bold"), relief="flat", bd=0, highlightthickness=0,
-                  padx=24, pady=10, cursor="hand2",
-                  activebackground="#1A6FA8", activeforeground="white",
-                  command=lambda: (result.__setitem__(0, True), win.destroy())
-                  ).pack(side="left", padx=(28, 0))
-        tk.Button(f_btn, text="Cancelar", bg="#424242", fg=WHITE,
-                  font=("Segoe UI", 12), relief="flat", bd=0, highlightthickness=0,
-                  padx=18, pady=10, cursor="hand2",
-                  activebackground="#555555", activeforeground="white",
-                  command=win.destroy).pack(side="right", padx=(0, 28))
+        cv_btn = tk.Canvas(win, bg=BG, highlightthickness=0, height=56)
+        cv_btn.pack(fill="x", pady=(8, 16))
+        _b_env = tk.Button(cv_btn, text="  ENVIAR  ", bg=BLUE, fg="white",
+                           font=("Segoe UI", 12, "bold"), relief="flat", bd=0, highlightthickness=0,
+                           padx=24, pady=10, cursor="hand2",
+                           activebackground="#1A6FA8", activeforeground="white",
+                           command=lambda: (result.__setitem__(0, True), win.destroy()))
+        _b_can = tk.Button(cv_btn, text="Cancelar", bg="#424242", fg=WHITE,
+                           font=("Segoe UI", 12), relief="flat", bd=0, highlightthickness=0,
+                           padx=18, pady=10, cursor="hand2",
+                           activebackground="#555555", activeforeground="white",
+                           command=win.destroy)
+        cv_btn.create_window(28, 28, window=_b_env, anchor="w")
+        cv_btn.create_window(W_w - 28, 28, window=_b_can, anchor="e")
 
         parent.wait_window(win)
         return result[0]
@@ -2745,16 +2748,18 @@ def criar_tela():
                 if c: _salvar_contato_chefe(c); lbl_ch_var.set(f"→  {c}")
                 if l: _salvar_grupo_whatsapp(l); lbl_lo_var.set(f"→  {l}")
                 sub.destroy()
-            f_eb = tk.Frame(sub, bg=BG, highlightthickness=0)
-            f_eb.pack(fill="x", pady=(12, 10))
-            tk.Button(f_eb, text="  OK  ", bg=BLUE, fg="white", font=("Segoe UI", 11, "bold"),
-                      relief="flat", bd=0, highlightthickness=0, padx=22, pady=8, cursor="hand2",
-                      activebackground="#1A6FA8", activeforeground="white",
-                      command=_ok_edit).pack(side="left", padx=(24, 0))
-            tk.Button(f_eb, text="Cancelar", bg="#424242", fg=WHITE, font=("Segoe UI", 11),
-                      relief="flat", bd=0, highlightthickness=0, padx=14, pady=8, cursor="hand2",
-                      activebackground="#555555", activeforeground="white",
-                      command=sub.destroy).pack(side="right", padx=(0, 24))
+            cv_eb2 = tk.Canvas(sub, bg=BG, highlightthickness=0, height=52)
+            cv_eb2.pack(fill="x", pady=(12, 10))
+            _b_ok2 = tk.Button(cv_eb2, text="  OK  ", bg=BLUE, fg="white", font=("Segoe UI", 11, "bold"),
+                               relief="flat", bd=0, highlightthickness=0, padx=22, pady=8, cursor="hand2",
+                               activebackground="#1A6FA8", activeforeground="white",
+                               command=_ok_edit)
+            _b_ca2 = tk.Button(cv_eb2, text="Cancelar", bg="#424242", fg=WHITE, font=("Segoe UI", 11),
+                               relief="flat", bd=0, highlightthickness=0, padx=14, pady=8, cursor="hand2",
+                               activebackground="#555555", activeforeground="white",
+                               command=sub.destroy)
+            cv_eb2.create_window(24, 26, window=_b_ok2, anchor="w")
+            cv_eb2.create_window(406, 26, window=_b_ca2, anchor="e")
 
         f_alt = tk.Frame(dial, bg=BG)
         f_alt.pack(fill="x", padx=36, pady=(10, 2))
@@ -2764,18 +2769,20 @@ def criar_tela():
                   activebackground="#1A4A72", activeforeground=WHITE,
                   command=_editar_dest_local).pack(fill="x")
 
-        f_btn = tk.Frame(dial, bg=BG, highlightthickness=0)
-        f_btn.pack(fill="x", pady=(10, 18))
-        tk.Button(f_btn, text="   ENVIAR   ", bg=BLUE, fg="white",
-                  font=("Segoe UI", 12, "bold"), relief="flat", bd=0, highlightthickness=0,
-                  padx=24, pady=10, cursor="hand2",
-                  activebackground="#1A6FA8", activeforeground="white",
-                  command=_confirmar).pack(side="left", padx=(28, 0))
-        tk.Button(f_btn, text="Cancelar", bg="#424242", fg=WHITE,
-                  font=("Segoe UI", 12), relief="flat", bd=0, highlightthickness=0,
-                  padx=18, pady=10, cursor="hand2",
-                  activebackground="#555555", activeforeground="white",
-                  command=dial.destroy).pack(side="right", padx=(0, 28))
+        cv_btn2 = tk.Canvas(dial, bg=BG, highlightthickness=0, height=56)
+        cv_btn2.pack(fill="x", pady=(10, 18))
+        _b_env2 = tk.Button(cv_btn2, text="   ENVIAR   ", bg=BLUE, fg="white",
+                            font=("Segoe UI", 12, "bold"), relief="flat", bd=0, highlightthickness=0,
+                            padx=24, pady=10, cursor="hand2",
+                            activebackground="#1A6FA8", activeforeground="white",
+                            command=_confirmar)
+        _b_can2 = tk.Button(cv_btn2, text="Cancelar", bg="#424242", fg=WHITE,
+                            font=("Segoe UI", 12), relief="flat", bd=0, highlightthickness=0,
+                            padx=18, pady=10, cursor="hand2",
+                            activebackground="#555555", activeforeground="white",
+                            command=dial.destroy)
+        cv_btn2.create_window(28, 28, window=_b_env2, anchor="w")
+        cv_btn2.create_window(W_d - 28, 28, window=_b_can2, anchor="e")
 
     f_resumo_container = ttkb.Labelframe(root, text=" 📊 DEMONSTRATIVO FINANCEIRO DA CARGA ", bootstyle="primary", padding=5)
     f_resumo_container.pack(fill="x", side="bottom", padx=10, pady=5)
