@@ -5,3 +5,9 @@
 *.pkl
 __pycache__/
 Backups/
+build/
+dist/
+config.ini
+FRETES/
+superpowers/
+ARQUIVO/
