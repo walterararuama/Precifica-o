@@ -117,42 +117,40 @@ def _salvar_contato_chefe(nome):
         cfg.write(_f)
 
 def _copiar_imagem_clipboard(img):
-    import tempfile as _tmp, subprocess as _sp2
-    f = _tmp.NamedTemporaryFile(suffix=".png", delete=False)
+    f = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
     path = f.name; f.close()
     img.save(path, "PNG")
+    path_ps = path.replace(chr(92), chr(47)).replace("'", "''")  # escapa aspas simples para PowerShell
     ps = (
         "Add-Type -AssemblyName System.Windows.Forms;"
         "Add-Type -AssemblyName System.Drawing;"
-        f"$i=[System.Drawing.Image]::FromFile('{path.replace(chr(92),chr(47))}');"
+        f"$i=[System.Drawing.Image]::FromFile('{path_ps}');"
         "[System.Windows.Forms.Clipboard]::SetImage($i);$i.Dispose()"
     )
-    _sp2.run(["powershell", "-NonInteractive", "-Command", ps],
-             capture_output=True, timeout=12)
+    subprocess.run(["powershell", "-NonInteractive", "-Command", ps],
+                   capture_output=True, timeout=12)
     try: os.unlink(path)
     except: pass
 
 def _enviar_whatsapp_desktop(grupo):
-    import subprocess as _sp, time as _t
-    import pyautogui as _ag, pygetwindow as _gw
-    _ag.FAILSAFE = False
-    _sp.run(["cmd", "/c", "start", "whatsapp://"], shell=True)
+    _pyag.FAILSAFE = False
+    subprocess.run(["cmd", "/c", "start", "whatsapp://"], shell=True)
     for _ in range(16):
-        _t.sleep(0.5)
-        wins = _gw.getWindowsWithTitle("WhatsApp")
+        time.sleep(0.5)
+        wins = _pygw.getWindowsWithTitle("WhatsApp")
         if wins:
             wins[0].activate()
             break
-    _t.sleep(1.2)
-    _ag.press('escape');     _t.sleep(0.3)
-    _ag.press('escape');     _t.sleep(0.3)
-    _ag.hotkey('ctrl','f');  _t.sleep(0.5)
-    _ag.hotkey('ctrl','a');  _ag.write(grupo, interval=0.05)
-    _t.sleep(1.8)
-    _ag.press('down');       _t.sleep(0.4)
-    _ag.press('enter');      _t.sleep(0.8)
-    _ag.hotkey('ctrl','v');  _t.sleep(2.0)
-    _ag.press('enter')
+    time.sleep(1.2)
+    _pyag.press('escape');     time.sleep(0.3)
+    _pyag.press('escape');     time.sleep(0.3)
+    _pyag.hotkey('ctrl','f');  time.sleep(0.5)
+    _pyag.hotkey('ctrl','a');  _pyag.write(grupo, interval=0.05)
+    time.sleep(1.8)
+    _pyag.press('down');       time.sleep(0.4)
+    _pyag.press('enter');      time.sleep(0.8)
+    _pyag.hotkey('ctrl','v');  time.sleep(2.0)
+    _pyag.press('enter')
 
 # =====================================================================
 # SPLASH SCREEN — aparece antes dos imports pesados
@@ -291,7 +289,11 @@ from datetime import datetime
 import time
 import logging
 import shutil
+import tempfile
+import subprocess
 from PIL import Image, ImageTk
+import pyautogui as _pyag
+import pygetwindow as _pygw
 
 _splash_set(68, "Carregando módulo de fretes...")
 from edicao_de_fretes import abrir_modulo_fretes
@@ -1272,7 +1274,7 @@ def criar_tela():
             scrollbar.pack(side=RIGHT, fill=Y)
             listbox.pack(side=LEFT, fill=BOTH, expand=True)
 
-            for _, r in resultados.iterrows(): listbox.insert(END, f"{r['_cod_str']} - {r['_nome_str']}")
+            for r in resultados.itertuples(index=False): listbox.insert(END, f"{r._cod_str} - {r._nome_str}")
 
             def select_item(event=None):
                 if not listbox or not listbox.winfo_exists() or not listbox.curselection():
@@ -1712,6 +1714,125 @@ def criar_tela():
         btn_carregar.pack(pady=15, fill="x", padx=20)
 
     # =====================================================================
+    # --- GERAÇÃO DE IMAGENS WHATSAPP (escopo compartilhado) ---
+    # =====================================================================
+    def _get_font_pil(size, bold=False):
+        from PIL import ImageFont as _IF
+        candidatos = [
+            (r"C:\Windows\Fonts\segoeuib.ttf" if bold else r"C:\Windows\Fonts\segoeui.ttf"),
+            r"C:\Windows\Fonts\arialbd.ttf" if bold else r"C:\Windows\Fonts\arial.ttf",
+        ]
+        for p in candidatos:
+            try: return _IF.truetype(p, size)
+            except: pass
+        return _IF.load_default()
+
+    def _gerar_imagem_chefe():
+        from PIL import Image as _Im, ImageDraw as _ID
+        C_BG=(23,32,42); C_BG2=(28,40,51); C_ROW=(33,47,61)
+        C_GOLD=(241,196,15); C_WHITE=(236,240,241); C_MUTED=(189,195,199)
+        C_BLUE=(174,214,241); C_SEP=(241,196,15)
+        W=960; PAD=22
+        X_CANT=W-490; X_CNOV=W-375; X_VEND=W-255; X_PRZO=W-135; X_MKP=W-32
+        forn=combo_forn.get(); nf=var_num_nota.get(); pedido=var_pedido.get()
+        data=datetime.now().strftime("%d/%m/%Y")
+        prods=[{"cod":r["var_cod"].get().strip(),"nome":r["var_nome"].get(),
+                "preco_ant":r["var_venda_antiga"].get(),"custo_ant":r["var_custo_atual"].get(),
+                "custo":r["var_novo_custo"].get(),"venda":r["var_venda"].get(),
+                "prazo":r["var_prazo"].get(),"markup":r["var_mkp_real"].get()}
+               for r in linhas_nota if r["var_cod"].get().strip()
+               and r["var_nome"].get() not in ["---","❌ PRODUTO NÃO ENCONTRADO"]]
+        fT=_get_font_pil(16,True); fS=_get_font_pil(12)
+        fP=_get_font_pil(13,True); fV=_get_font_pil(12); fF=_get_font_pil(12,True)
+        HEADER_H=100; SUB_H=40; ROW_H=78; FOOT_H=56; SEP=2
+        H=HEADER_H+SUB_H+SEP+len(prods)*ROW_H+(max(0,len(prods)-1)*SEP)+FOOT_H
+        img=_Im.new("RGB",(W,H),C_BG); d=_ID.Draw(img)
+        d.rectangle([0,0,W,HEADER_H],fill=C_BG)
+        d.text((PAD,18),"RESUMO DE PRECIFICACAO",fill=C_GOLD,font=fT)
+        d.text((PAD,44),f"Fornecedor: {forn}",fill=C_BLUE,font=fS)
+        d.text((PAD,64),f"NF: {nf}   |   Pedido: {pedido}   |   {data}",fill=C_MUTED,font=fV)
+        d.rectangle([0,HEADER_H,W,HEADER_H+SEP],fill=C_SEP)
+        y=HEADER_H+SEP
+        d.rectangle([0,y,W,y+SUB_H],fill=(19,27,36))
+        d.text((PAD,y+20),"PRODUTO",fill=C_MUTED,font=fF,anchor="lm")
+        d.text((X_CANT,y+20),"CUSTO ANT",fill=C_MUTED,font=fF,anchor="mm")
+        d.text((X_CNOV,y+20),"CUSTO NOVO",fill=C_MUTED,font=fF,anchor="mm")
+        d.text((X_VEND,y+20),"VENDA",fill=C_MUTED,font=fF,anchor="mm")
+        d.text((X_PRZO,y+20),"PRAZO",fill=C_MUTED,font=fF,anchor="mm")
+        d.text((X_MKP,y+20),"MARKUP",fill=C_MUTED,font=fF,anchor="rm")
+        y+=SUB_H
+        for i,p in enumerate(prods):
+            bg=C_BG2 if i%2==0 else C_ROW
+            d.rectangle([0,y,W,y+ROW_H],fill=bg)
+            texto=f"[{p['cod']}]  "+p["nome"]; orig=texto; max_w=X_CANT-PAD-30
+            while d.textlength(texto,font=fP)>max_w: texto=texto[:-1]
+            if len(texto)<len(orig): texto=texto[:-1]+"…"
+            mid=y+ROW_H//2
+            d.text((PAD,y+16),texto,fill=C_WHITE,font=fP,anchor="lm")
+            d.text((PAD,y+50),f"Preço ant: {p['preco_ant']}",fill=C_MUTED,font=fS,anchor="lm")
+            d.text((X_CANT,mid),p["custo_ant"],fill=C_MUTED,font=fP,anchor="mm")
+            d.text((X_CNOV,mid),p["custo"],fill=C_WHITE,font=fP,anchor="mm")
+            d.text((X_VEND,mid),p["venda"],fill=C_WHITE,font=fP,anchor="mm")
+            d.text((X_PRZO,mid),p["prazo"],fill=C_WHITE,font=fP,anchor="mm")
+            d.text((X_MKP,mid),p["markup"],fill=C_GOLD,font=fP,anchor="rm")
+            y+=ROW_H
+            if i<len(prods)-1: d.rectangle([0,y,W,y+SEP],fill=(40,55,71)); y+=SEP
+        d.rectangle([0,y,W,H],fill=C_BG)
+        resumo=re.sub(r'Itens:\s*\d+\s*\|\s*','',lbl_res_formula.cget("text"))
+        d.text((PAD,y+18),resumo,fill=C_MUTED,font=fF)
+        return img
+
+    def _gerar_imagem_lojas():
+        from PIL import Image as _Im, ImageDraw as _ID
+        C_BG=(11,61,37); C_BG2=(8,46,28); C_ROW=(15,77,46)
+        C_GOLD=(241,196,15); C_WHITE=(236,240,241); C_MUTED=(161,221,192); C_SEP=(39,174,96)
+        W=760; PAD=28
+        forn=combo_forn.get(); data=datetime.now().strftime("%d/%m/%Y")
+        regime_av=var_regime.get(); prods=[]
+        for r in linhas_nota:
+            if r["var_cod"].get().strip() and r["var_nome"].get() not in ["---","❌ PRODUTO NÃO ENCONTRADO"]:
+                q_nf=r["var_qtd_nf"].get(); q_bon=r["var_qtd_rom"].get()
+                if regime_av=="MISTA (NF + Romaneio)": qtd=q_bon
+                elif regime_av=="NOTA + BONIFICAÇÃO":
+                    try: tot=int(float(q_nf or 0)+float(q_bon or 0))
+                    except: tot="?"
+                    qtd=str(tot)
+                else: qtd=q_nf
+                prods.append({"cod":r["var_cod"].get().strip(),"nome":r["var_nome"].get(),
+                              "qtd":qtd,"venda":r["var_venda"].get(),"prazo":r["var_prazo"].get()})
+        fT=_get_font_pil(16,True); fS=_get_font_pil(13)
+        fP=_get_font_pil(14,True); fV=_get_font_pil(13); fF=_get_font_pil(13,True)
+        HEADER_H=90; SUB_H=40; ROW_H=62; FOOT_H=46; SEP=2
+        H=HEADER_H+SUB_H+SEP+len(prods)*ROW_H+(max(0,len(prods)-1)*SEP)+FOOT_H
+        img=_Im.new("RGB",(W,H),C_BG); d=_ID.Draw(img)
+        d.rectangle([0,0,W,HEADER_H],fill=C_BG2)
+        d.text((PAD,16),"AVISO DE NOVOS PRECOS",fill=C_GOLD,font=fT)
+        d.text((PAD,46),f"Fornecedor: {forn}   |   {data}",fill=C_MUTED,font=fS)
+        d.rectangle([0,HEADER_H,W,HEADER_H+SEP],fill=C_SEP)
+        y=HEADER_H+SEP
+        d.rectangle([0,y,W,y+SUB_H],fill=(6,36,22))
+        d.text((PAD,y+20),"PRODUTO",fill=C_MUTED,font=fF,anchor="lm")
+        d.text((W-260,y+20),"QTD",fill=C_MUTED,font=fF,anchor="mm")
+        d.text((W-155,y+20),"VENDA",fill=C_MUTED,font=fF,anchor="mm")
+        d.text((W-50,y+20),"PRAZO",fill=C_MUTED,font=fF,anchor="mm")
+        y+=SUB_H
+        for i,p in enumerate(prods):
+            bg=C_BG if i%2==0 else C_ROW
+            d.rectangle([0,y,W,y+ROW_H],fill=bg)
+            texto=f"[{p['cod']}]  "+p["nome"]; orig=texto; max_w=W-310-PAD-10
+            while d.textlength(texto,font=fP)>max_w: texto=texto[:-1]
+            if len(texto)<len(orig): texto=texto[:-1]+"…"
+            d.text((PAD,y+31),texto,fill=C_WHITE,font=fP,anchor="lm")
+            d.text((W-260,y+31),p["qtd"],fill=C_WHITE,font=fP,anchor="mm")
+            d.text((W-155,y+31),p["venda"],fill=C_WHITE,font=fP,anchor="mm")
+            d.text((W-50,y+31),p["prazo"],fill=C_WHITE,font=fP,anchor="mm")
+            y+=ROW_H
+            if i<len(prods)-1: d.rectangle([0,y,W,y+SEP],fill=(20,90,50)); y+=SEP
+        d.rectangle([0,y,W,H],fill=C_BG2)
+        d.text((PAD,y+14),"Boas vendas!",fill=C_MUTED,font=fF)
+        return img
+
+    # =====================================================================
     # --- AUDITORIA FINANCEIRA E EXPORTAÇÃO ---
     # =====================================================================
     def abrir_cofre_auditoria():
@@ -1952,182 +2073,7 @@ def criar_tela():
             lbl_d.pack(pady=4)
             f_status_bar.pack(fill="x", padx=20, pady=(4, 2))
             
-            # === GERAÇÃO DE IMAGENS PARA CLIPBOARD ===
-            def _get_font_pil(size, bold=False):
-                from PIL import ImageFont as _IF
-                candidatos = [
-                    (r"C:\Windows\Fonts\segoeuib.ttf" if bold else r"C:\Windows\Fonts\segoeui.ttf"),
-                    r"C:\Windows\Fonts\arialbd.ttf" if bold else r"C:\Windows\Fonts\arial.ttf",
-                ]
-                for p in candidatos:
-                    try: return _IF.truetype(p, size)
-                    except: pass
-                return _IF.load_default()
-
-            def _gerar_imagem_chefe():
-                from PIL import Image as _Im, ImageDraw as _ID
-                C_BG     = (23,  32,  42)
-                C_BG2    = (28,  40,  51)
-                C_ROW    = (33,  47,  61)
-                C_GOLD   = (241,196,  15)
-                C_WHITE  = (236,240, 241)
-                C_MUTED  = (189,195, 199)
-                C_BLUE   = (174,214, 241)
-                C_SEP    = (241,196,  15)
-                W = 960; PAD = 22
-                # Posições X dos centros das 5 colunas da direita
-                X_CANT = W - 490   # CUSTO ANT
-                X_CNOV = W - 375   # CUSTO NOVO
-                X_VEND = W - 255   # VENDA
-                X_PRZO = W - 135   # PRAZO
-                X_MKP  = W - 32    # MARKUP (âncora direita)
-                forn   = combo_forn.get()
-                nf     = var_num_nota.get()
-                pedido = var_pedido.get()
-                data   = datetime.now().strftime("%d/%m/%Y")
-                prods  = [
-                    {"cod":       r["var_cod"].get().strip(),
-                     "nome":      r["var_nome"].get(),
-                     "preco_ant": r["var_venda_antiga"].get(),
-                     "custo_ant": r["var_custo_atual"].get(),
-                     "custo":     r["var_novo_custo"].get(),
-                     "venda":     r["var_venda"].get(),
-                     "prazo":     r["var_prazo"].get(),
-                     "markup":    r["var_mkp_real"].get()}
-                    for r in linhas_nota
-                    if r["var_cod"].get().strip()
-                    and r["var_nome"].get() not in ["---", "❌ PRODUTO NÃO ENCONTRADO"]
-                ]
-                fT = _get_font_pil(16, bold=True)
-                fS = _get_font_pil(12)
-                fP = _get_font_pil(13, bold=True)
-                fV = _get_font_pil(12)
-                fF = _get_font_pil(12, bold=True)
-                HEADER_H = 100; SUB_H = 40; ROW_H = 78; FOOT_H = 56; SEP = 2
-                H = HEADER_H + SUB_H + SEP + len(prods)*ROW_H + (max(0,len(prods)-1)*SEP) + FOOT_H
-                img = _Im.new("RGB", (W, H), C_BG)
-                d   = _ID.Draw(img)
-                # Header
-                d.rectangle([0,0,W,HEADER_H], fill=C_BG)
-                d.text((PAD, 18), "RESUMO DE PRECIFICACAO", fill=C_GOLD, font=fT)
-                d.text((PAD, 44), f"Fornecedor: {forn}", fill=C_BLUE, font=fS)
-                d.text((PAD, 64), f"NF: {nf}   |   Pedido: {pedido}   |   {data}", fill=C_MUTED, font=fV)
-                d.rectangle([0, HEADER_H, W, HEADER_H+SEP], fill=C_SEP)
-                # Sub-header
-                y = HEADER_H + SEP
-                d.rectangle([0, y, W, y+SUB_H], fill=(19,27,36))
-                d.text((PAD,    y+20), "PRODUTO",     fill=C_MUTED, font=fF, anchor="lm")
-                d.text((X_CANT, y+20), "CUSTO ANT",   fill=C_MUTED, font=fF, anchor="mm")
-                d.text((X_CNOV, y+20), "CUSTO NOVO",  fill=C_MUTED, font=fF, anchor="mm")
-                d.text((X_VEND, y+20), "VENDA",       fill=C_MUTED, font=fF, anchor="mm")
-                d.text((X_PRZO, y+20), "PRAZO",       fill=C_MUTED, font=fF, anchor="mm")
-                d.text((X_MKP,  y+20), "MARKUP",      fill=C_MUTED, font=fF, anchor="rm")
-                y += SUB_H
-                # Produtos
-                for i, p in enumerate(prods):
-                    bg = C_BG2 if i%2==0 else C_ROW
-                    d.rectangle([0, y, W, y+ROW_H], fill=bg)
-                    texto = f"[{p['cod']}]  " + p["nome"]
-                    max_w = X_CANT - PAD - 30
-                    orig  = texto
-                    while d.textlength(texto, font=fP) > max_w:
-                        texto = texto[:-1]
-                    if len(texto) < len(orig):
-                        texto = texto[:-1] + "…"
-                    mid = y + ROW_H // 2
-                    d.text((PAD,    y+16), texto,              fill=C_WHITE, font=fP, anchor="lm")
-                    d.text((PAD,    y+50), f"Preço ant: {p['preco_ant']}", fill=C_MUTED, font=fS, anchor="lm")
-                    d.text((X_CANT, mid),  p["custo_ant"],     fill=C_MUTED, font=fP, anchor="mm")
-                    d.text((X_CNOV, mid),  p["custo"],         fill=C_WHITE, font=fP, anchor="mm")
-                    d.text((X_VEND, mid),  p["venda"],         fill=C_WHITE, font=fP, anchor="mm")
-                    d.text((X_PRZO, mid),  p["prazo"],         fill=C_WHITE, font=fP, anchor="mm")
-                    d.text((X_MKP,  mid),  p["markup"],        fill=C_GOLD,  font=fP, anchor="rm")
-                    y += ROW_H
-                    if i < len(prods)-1:
-                        d.rectangle([0,y,W,y+SEP], fill=(40,55,71))
-                        y += SEP
-                # Footer
-                d.rectangle([0, y, W, H], fill=C_BG)
-                resumo = re.sub(r'Itens:\s*\d+\s*\|\s*','', lbl_res_formula.cget("text"))
-                d.text((PAD, y+18), resumo, fill=C_MUTED, font=fF)
-                return img
-
-            def _gerar_imagem_lojas():
-                from PIL import Image as _Im, ImageDraw as _ID
-                C_BG   = (11, 61, 37)
-                C_BG2  = (8,  46, 28)
-                C_ROW  = (15, 77, 46)
-                C_GOLD = (241,196, 15)
-                C_WHITE= (236,240,241)
-                C_MUTED= (161,221,192)
-                C_SEP  = (39,174, 96)
-                W = 760; PAD = 28
-                forn   = combo_forn.get()
-                data   = datetime.now().strftime("%d/%m/%Y")
-                regime_av = var_regime.get()
-                prods = []
-                for r in linhas_nota:
-                    if r["var_cod"].get().strip() and r["var_nome"].get() not in ["---", "❌ PRODUTO NÃO ENCONTRADO"]:
-                        q_nf  = r["var_qtd_nf"].get()
-                        q_bon = r["var_qtd_rom"].get()
-                        if regime_av == "MISTA (NF + Romaneio)":
-                            qtd = q_bon
-                        elif regime_av == "NOTA + BONIFICAÇÃO":
-                            try: tot = int(float(q_nf or 0)+float(q_bon or 0))
-                            except: tot = "?"
-                            qtd = str(tot)
-                        else:
-                            qtd = q_nf
-                        prods.append({"cod": r["var_cod"].get().strip(),
-                                      "nome": r["var_nome"].get(),
-                                      "qtd": qtd,
-                                      "venda": r["var_venda"].get(),
-                                      "prazo": r["var_prazo"].get()})
-                fT = _get_font_pil(16, bold=True)
-                fS = _get_font_pil(13)
-                fP = _get_font_pil(14, bold=True)
-                fV = _get_font_pil(13)
-                fF = _get_font_pil(13, bold=True)
-                HEADER_H = 90; SUB_H = 40; ROW_H = 62; FOOT_H = 46; SEP = 2
-                H = HEADER_H + SUB_H + SEP + len(prods)*ROW_H + (max(0,len(prods)-1)*SEP) + FOOT_H
-                img = _Im.new("RGB", (W, H), C_BG)
-                d   = _ID.Draw(img)
-                # Header
-                d.rectangle([0,0,W,HEADER_H], fill=C_BG2)
-                d.text((PAD, 16), "AVISO DE NOVOS PRECOS", fill=C_GOLD, font=fT)
-                d.text((PAD, 46), f"Fornecedor: {forn}   |   {data}", fill=C_MUTED, font=fS)
-                d.rectangle([0, HEADER_H, W, HEADER_H+SEP], fill=C_SEP)
-                # Sub-header
-                y = HEADER_H + SEP
-                d.rectangle([0,y,W,y+SUB_H], fill=(6,36,22))
-                d.text((PAD,   y+20), "PRODUTO", fill=C_MUTED, font=fF, anchor="lm")
-                d.text((W-260, y+20), "QTD",     fill=C_MUTED, font=fF, anchor="mm")
-                d.text((W-155, y+20), "VENDA",   fill=C_MUTED, font=fF, anchor="mm")
-                d.text((W-50,  y+20), "PRAZO",   fill=C_MUTED, font=fF, anchor="mm")
-                y += SUB_H
-                # Produtos
-                for i, p in enumerate(prods):
-                    bg = C_BG if i%2==0 else C_ROW
-                    d.rectangle([0,y,W,y+ROW_H], fill=bg)
-                    texto = f"[{p['cod']}]  " + p["nome"]
-                    max_w = W - 310 - PAD - 10
-                    orig  = texto
-                    while d.textlength(texto, font=fP) > max_w:
-                        texto = texto[:-1]
-                    if len(texto) < len(orig):
-                        texto = texto[:-1] + "…"
-                    d.text((PAD,   y+31), texto,    fill=C_WHITE, font=fP, anchor="lm")
-                    d.text((W-260, y+31), p["qtd"],   fill=C_WHITE, font=fP, anchor="mm")
-                    d.text((W-155, y+31), p["venda"], fill=C_WHITE, font=fP, anchor="mm")
-                    d.text((W-50,  y+31), p["prazo"], fill=C_WHITE, font=fP, anchor="mm")
-                    y += ROW_H
-                    if i < len(prods)-1:
-                        d.rectangle([0,y,W,y+SEP], fill=(20,90,50))
-                        y += SEP
-                # Footer
-                d.rectangle([0,y,W,H], fill=C_BG2)
-                d.text((PAD, y+14), "Boas vendas!", fill=C_MUTED, font=fF)
-                return img
+            # Funções de imagem definidas no escopo externo (compartilhadas)
 
             def copiar_resumo_area_transferencia():
                 try:
@@ -2567,123 +2513,7 @@ def criar_tela():
         tk.Frame(f_opts, bg="#2C3E50", height=1).pack(fill="x", padx=16)
         lbl_lo_var = _make_toggle(f_opts, var_lo, "LOJAS", nome_lojas)
 
-        def _get_font_pil_local(size, bold=False):
-            from PIL import ImageFont as _IF
-            candidatos = [
-                "C:/Windows/Fonts/segoeui.ttf" if not bold else "C:/Windows/Fonts/segoeuib.ttf",
-                "C:/Windows/Fonts/arial.ttf"   if not bold else "C:/Windows/Fonts/arialbd.ttf",
-                "C:/Windows/Fonts/verdana.ttf"
-            ]
-            for c in candidatos:
-                if os.path.exists(c):
-                    try: return _IF.truetype(c, size)
-                    except: pass
-            return _IF.load_default()
-
-        def _gerar_img_chefe_local():
-            from PIL import Image as _Im, ImageDraw as _ID
-            C_BG=(23,32,42); C_BG2=(28,40,51); C_ROW=(33,47,61)
-            C_GOLD=(241,196,15); C_WHITE=(236,240,241); C_MUTED=(189,195,199)
-            C_BLUE=(174,214,241); C_SEP=(241,196,15)
-            W=960; PAD=22
-            X_CANT=W-490; X_CNOV=W-375; X_VEND=W-255; X_PRZO=W-135; X_MKP=W-32
-            forn=combo_forn.get(); nf=var_num_nota.get(); pedido=var_pedido.get()
-            data=datetime.now().strftime("%d/%m/%Y")
-            prods=[{"cod":r["var_cod"].get().strip(),"nome":r["var_nome"].get(),
-                    "preco_ant":r["var_venda_antiga"].get(),"custo_ant":r["var_custo_atual"].get(),
-                    "custo":r["var_novo_custo"].get(),"venda":r["var_venda"].get(),
-                    "prazo":r["var_prazo"].get(),"markup":r["var_mkp_real"].get()}
-                   for r in linhas_nota if r["var_cod"].get().strip()
-                   and r["var_nome"].get() not in ["---","❌ PRODUTO NÃO ENCONTRADO"]]
-            fT=_get_font_pil_local(16,True); fS=_get_font_pil_local(12)
-            fP=_get_font_pil_local(13,True); fV=_get_font_pil_local(12); fF=_get_font_pil_local(12,True)
-            HEADER_H=100; SUB_H=40; ROW_H=78; FOOT_H=56; SEP=2
-            H=HEADER_H+SUB_H+SEP+len(prods)*ROW_H+(max(0,len(prods)-1)*SEP)+FOOT_H
-            img=_Im.new("RGB",(W,H),C_BG); d=_ID.Draw(img)
-            d.rectangle([0,0,W,HEADER_H],fill=C_BG)
-            d.text((PAD,18),"RESUMO DE PRECIFICACAO",fill=C_GOLD,font=fT)
-            d.text((PAD,44),f"Fornecedor: {forn}",fill=C_BLUE,font=fS)
-            d.text((PAD,64),f"NF: {nf}   |   Pedido: {pedido}   |   {data}",fill=C_MUTED,font=fV)
-            d.rectangle([0,HEADER_H,W,HEADER_H+SEP],fill=C_SEP)
-            y=HEADER_H+SEP
-            d.rectangle([0,y,W,y+SUB_H],fill=(19,27,36))
-            d.text((PAD,y+20),"PRODUTO",fill=C_MUTED,font=fF,anchor="lm")
-            d.text((X_CANT,y+20),"CUSTO ANT",fill=C_MUTED,font=fF,anchor="mm")
-            d.text((X_CNOV,y+20),"CUSTO NOVO",fill=C_MUTED,font=fF,anchor="mm")
-            d.text((X_VEND,y+20),"VENDA",fill=C_MUTED,font=fF,anchor="mm")
-            d.text((X_PRZO,y+20),"PRAZO",fill=C_MUTED,font=fF,anchor="mm")
-            d.text((X_MKP,y+20),"MARKUP",fill=C_MUTED,font=fF,anchor="rm")
-            y+=SUB_H
-            for i,p in enumerate(prods):
-                bg=C_BG2 if i%2==0 else C_ROW
-                d.rectangle([0,y,W,y+ROW_H],fill=bg)
-                texto=f"[{p['cod']}]  "+p["nome"]; orig=texto; max_w=X_CANT-PAD-30
-                while d.textlength(texto,font=fP)>max_w: texto=texto[:-1]
-                if len(texto)<len(orig): texto=texto[:-1]+"…"
-                mid=y+ROW_H//2
-                d.text((PAD,y+16),texto,fill=C_WHITE,font=fP,anchor="lm")
-                d.text((PAD,y+50),f"Preço ant: {p['preco_ant']}",fill=C_MUTED,font=fS,anchor="lm")
-                d.text((X_CANT,mid),p["custo_ant"],fill=C_MUTED,font=fP,anchor="mm")
-                d.text((X_CNOV,mid),p["custo"],fill=C_WHITE,font=fP,anchor="mm")
-                d.text((X_VEND,mid),p["venda"],fill=C_WHITE,font=fP,anchor="mm")
-                d.text((X_PRZO,mid),p["prazo"],fill=C_WHITE,font=fP,anchor="mm")
-                d.text((X_MKP,mid),p["markup"],fill=C_GOLD,font=fP,anchor="rm")
-                y+=ROW_H
-                if i<len(prods)-1: d.rectangle([0,y,W,y+SEP],fill=(40,55,71)); y+=SEP
-            d.rectangle([0,y,W,H],fill=C_BG)
-            resumo=re.sub(r'Itens:\s*\d+\s*\|\s*','',lbl_res_formula.cget("text"))
-            d.text((PAD,y+18),resumo,fill=C_MUTED,font=fF)
-            return img
-
-        def _gerar_img_lojas_local():
-            from PIL import Image as _Im, ImageDraw as _ID
-            C_BG=(11,61,37); C_BG2=(8,46,28); C_ROW=(15,77,46)
-            C_GOLD=(241,196,15); C_WHITE=(236,240,241); C_MUTED=(161,221,192); C_SEP=(39,174,96)
-            W=760; PAD=28
-            forn=combo_forn.get(); data=datetime.now().strftime("%d/%m/%Y")
-            regime_av=var_regime.get(); prods=[]
-            for r in linhas_nota:
-                if r["var_cod"].get().strip() and r["var_nome"].get() not in ["---","❌ PRODUTO NÃO ENCONTRADO"]:
-                    q_nf=r["var_qtd_nf"].get(); q_bon=r["var_qtd_rom"].get()
-                    if regime_av=="MISTA (NF + Romaneio)": qtd=q_bon
-                    elif regime_av=="NOTA + BONIFICAÇÃO":
-                        try: tot=int(float(q_nf or 0)+float(q_bon or 0))
-                        except: tot="?"
-                        qtd=str(tot)
-                    else: qtd=q_nf
-                    prods.append({"cod":r["var_cod"].get().strip(),"nome":r["var_nome"].get(),
-                                  "qtd":qtd,"venda":r["var_venda"].get(),"prazo":r["var_prazo"].get()})
-            fT=_get_font_pil_local(16,True); fS=_get_font_pil_local(13)
-            fP=_get_font_pil_local(14,True); fV=_get_font_pil_local(13); fF=_get_font_pil_local(13,True)
-            HEADER_H=90; SUB_H=40; ROW_H=62; FOOT_H=46; SEP=2
-            H=HEADER_H+SUB_H+SEP+len(prods)*ROW_H+(max(0,len(prods)-1)*SEP)+FOOT_H
-            img=_Im.new("RGB",(W,H),C_BG); d=_ID.Draw(img)
-            d.rectangle([0,0,W,HEADER_H],fill=C_BG2)
-            d.text((PAD,16),"AVISO DE NOVOS PRECOS",fill=C_GOLD,font=fT)
-            d.text((PAD,46),f"Fornecedor: {forn}   |   {data}",fill=C_MUTED,font=fS)
-            d.rectangle([0,HEADER_H,W,HEADER_H+SEP],fill=C_SEP)
-            y=HEADER_H+SEP
-            d.rectangle([0,y,W,y+SUB_H],fill=(6,36,22))
-            d.text((PAD,y+20),"PRODUTO",fill=C_MUTED,font=fF,anchor="lm")
-            d.text((W-260,y+20),"QTD",fill=C_MUTED,font=fF,anchor="mm")
-            d.text((W-155,y+20),"VENDA",fill=C_MUTED,font=fF,anchor="mm")
-            d.text((W-50,y+20),"PRAZO",fill=C_MUTED,font=fF,anchor="mm")
-            y+=SUB_H
-            for i,p in enumerate(prods):
-                bg=C_BG if i%2==0 else C_ROW
-                d.rectangle([0,y,W,y+ROW_H],fill=bg)
-                texto=f"[{p['cod']}]  "+p["nome"]; orig=texto; max_w=W-310-PAD-10
-                while d.textlength(texto,font=fP)>max_w: texto=texto[:-1]
-                if len(texto)<len(orig): texto=texto[:-1]+"…"
-                d.text((PAD,y+31),texto,fill=C_WHITE,font=fP,anchor="lm")
-                d.text((W-260,y+31),p["qtd"],fill=C_WHITE,font=fP,anchor="mm")
-                d.text((W-155,y+31),p["venda"],fill=C_WHITE,font=fP,anchor="mm")
-                d.text((W-50,y+31),p["prazo"],fill=C_WHITE,font=fP,anchor="mm")
-                y+=ROW_H
-                if i<len(prods)-1: d.rectangle([0,y,W,y+SEP],fill=(20,90,50)); y+=SEP
-            d.rectangle([0,y,W,H],fill=C_BG2)
-            d.text((PAD,y+14),"Boas vendas!",fill=C_MUTED,font=fF)
-            return img
+        # Funções de imagem definidas no escopo externo (compartilhadas)
 
         def _confirmar():
             envia_chefe = var_ch.get()
@@ -2697,12 +2527,12 @@ def criar_tela():
             try:
                 import time as _t2
                 if envia_lojas:
-                    img_lo = _gerar_img_lojas_local()
+                    img_lo = _gerar_imagem_lojas()
                     _copiar_imagem_clipboard(img_lo)
                     _enviar_whatsapp_desktop(_ler_grupo_whatsapp())
                     if envia_chefe: _t2.sleep(3.0)
                 if envia_chefe:
-                    img_ch = _gerar_img_chefe_local()
+                    img_ch = _gerar_imagem_chefe()
                     _copiar_imagem_clipboard(img_ch)
                     _enviar_whatsapp_desktop(_ler_contato_chefe())
                 messagebox.showinfo("Enviado!", "Aviso(s) enviado(s) com sucesso!")

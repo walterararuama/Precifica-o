@@ -5,7 +5,6 @@ import webbrowser
 import sqlite3
 import pandas as pd
 from datetime import datetime
-import html as html_escape_module
 import logging
 import openpyxl
 from openpyxl import Workbook

@@ -4,9 +4,6 @@ import pandas as pd
 import tkinter as tk
 from tkinter import messagebox
 import ttkbootstrap as ttkb
-import html as html_escape_module
-import tempfile
-import webbrowser
 
 def inicializar_banco_fornecedores(db_path, diretorio_atual):
     with sqlite3.connect(db_path, timeout=10) as conn:

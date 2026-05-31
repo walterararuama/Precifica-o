@@ -7,6 +7,7 @@ import openpyxl
 import tempfile
 import webbrowser
 from datetime import datetime
+from utils import formatar_moeda as _fmt_brl
 
 def abrir_modulo_fretes(root, pasta_fretes):
     """
@@ -140,8 +141,7 @@ def abrir_modulo_fretes(root, pasta_fretes):
                             tot_receita += val_float
                 except: pass
                 
-        def formatar(v):
-            return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        formatar = _fmt_brl
             
         resumo = f"🛒 VALOR NOTA: {formatar(tot_nota)}    |    🚚 VALOR B-LOG: {formatar(tot_blog)}    |    💸 TERCEIROS: {formatar(tot_terceiro)}    |    ✅ RECEITA LÍQUIDA: {formatar(tot_receita)}"
         var_resumo_totais.set(resumo)
@@ -328,7 +328,7 @@ def abrir_modulo_fretes(root, pasta_fretes):
         for i in range(1, len(colunas)):
             nome_col = colunas[i].upper()
             if "VALOR" in nome_col or "RECEITA" in nome_col or "$" in nome_col or i in [5, 8, 9, 10, 11]:
-                html += f"<td>R$ {totais[i]:,.2f}</td>".replace(",", "X").replace(".", ",").replace("X", ".")
+                html += f"<td>{_fmt_brl(totais[i])}</td>"
             else:
                 html += "<td>-</td>"
         html += "</tr></tbody></table>"
@@ -423,7 +423,7 @@ def abrir_modulo_fretes(root, pasta_fretes):
                             num_f = float(v_conv)
                             
                             if "VALOR" in nome_coluna or "RECEITA" in nome_coluna or "$" in nome_coluna or j in [6, 9, 10, 11, 12]:
-                                texto = f"R$ {num_f:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                                texto = _fmt_brl(num_f)
                             elif "COMBINADO" in nome_coluna or "%" in nome_coluna or j == 8:
                                 texto = f"{num_f if num_f > 1.0 else num_f*100:,.2f}%".replace(".", ",")
                         except: pass

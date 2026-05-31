@@ -59,7 +59,7 @@ def check_nota_duplicada(nota_digitada, pasta_fretes):
     
     if not os.path.exists(arquivo_blog): return False
     
-    temp_file_path = os.path.join(tempfile.gettempdir(), f"temp_blog_check_{int(time.time())}.xlsx")
+    temp_file_path = tempfile.mktemp(prefix="blog_check_", suffix=".xlsx")
     try:
         shutil.copy2(arquivo_blog, temp_file_path)
         wb = openpyxl.load_workbook(temp_file_path, data_only=True)
