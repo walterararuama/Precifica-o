@@ -90,59 +90,7 @@ def processar_exportacao_carga(dados):
     novo_arquivo_retorno = caminho_excel
 
     # ---------------- ESPELHO HTML ----------------
-    e = html_escape_module.escape
-    ignorar_html = ["NOTA", "EMISSAO", "CHEGADA", "TIPO FRETE", "VLR TERCEIRO"]
-    
-    colunas_html = "".join([f"<th>{e(str(k))}</th>" for k in dados['itens'][0].keys() if k not in ignorar_html])
-    linhas_html = ""
-    for d in dados['itens']:
-        linhas_html += "<tr>" + "".join([
-            f"<td class='novo-custo'>{e(str(v))}</td>" if k=="NOVO CUSTO" 
-            else f"<td class='venda-prazo'>{e(str(v))}</td>" if k in ["VENDA (R$)", "PRAZO (R$)", "MKP REAL"] 
-            else f"<td class='prod-nome'>{e(str(v))}</td>" if k=="Produto" 
-            else f"<td>{e(str(v))}</td>" 
-            for k,v in d.items() if k not in ignorar_html
-        ]) + "</tr>"
-    
-    forn_safe = e(forn); pedido_safe = e(num_pedido_limpo)
-    texto_pedido = f" | <b>Pedido FDC:</b> <span style='color: #c0392b;'>{pedido_safe}</span>" if pedido_safe else ""
-    resumo_safe = e(dados['resumo_texto'])
-    
-    nota_safe = e(dados['num_nota'])
-    frete_safe = e(dados['tipo_frete'])
-    pag_safe = e(dados['status_pagamento'])
-
-    alerta_pendente_html = ""
-    if is_pendente:
-        alerta_pendente_html = "<div style='color: #c0392b; border: 2px dashed #c0392b; padding: 15px; margin-bottom: 20px; font-size: 16px; font-weight: bold; text-align: center; background-color: #fadbd8; text-transform: uppercase;'>⚠️ ATENÇÃO: ESTA CARGA ESTÁ PENDENTE DE BOLETOS (AUDITORIA INCOMPLETA) ⚠️</div>"
-        
-    html = f"""
-    <html><head><meta charset="utf-8"><title>Espelho de Carga - {forn_safe}</title><style>
-        body {{ font-family: 'Segoe UI', Arial, sans-serif; padding: 20px; color: #333; }}
-        h2 {{ color: #2C3E50; margin-bottom: 5px; }} .info {{ font-size: 14px; color: #7F8C8D; margin-bottom: 20px; }}
-        table {{ width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 12px; }}
-        th, td {{ border: 1px solid #BDC3C7; padding: 8px; text-align: center; }} th {{ background-color: #34495E; color: white; }}
-        .prod-nome {{ text-align: left; }} .novo-custo {{ font-weight: bold; color: #D35400; background-color: #FDEBD0; }}
-        .venda-prazo {{ font-weight: bold; color: #0E6655; background-color: #E8F8F5; }}
-        .resumo {{ margin-top: 30px; border: 2px solid #2C3E50; padding: 15px; background: #ECF0F1; font-size: 14px; text-align: center; }}
-        @media print {{ .no-print {{ display: none !important; }} }}
-    </style></head><body>
-    <h2>ESPELHO DE PRECIFICAÇÃO E VENDAS - BRUNO ELETROMÓVEIS</h2>
-    {alerta_pendente_html}
-    <div class="info">
-        <b>Fornecedor:</b> {forn_safe}{texto_pedido} | <b>Nota Fiscal:</b> {nota_safe} | <b>Regime:</b> {e(dados['regime'])} <br>
-        <b>Tipo de Frete:</b> {frete_safe} | <b>Pagamento:</b> {pag_safe} | <b>Data:</b> {datetime.now().strftime('%d/%m/%Y às %H:%M')}
-    </div>
-    <table><tr>{colunas_html}</tr>{linhas_html}</table>
-    <div class="resumo"><p><b>DEMONSTRATIVO FINANCEIRO DA COMPRA:</b></p><p style="font-size:16px; color:#c0392b;"><b>{resumo_safe}</b></p></div>
-    <div class="no-print" style="margin-top: 40px; text-align: center;">
-        <button onclick="window.print()" style="padding: 15px 30px; font-size: 18px; cursor: pointer; background-color: #2980b9; color: white; border: none; border-radius: 5px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">🖨️ ENVIAR PARA IMPRESSORA</button>
-    </div></body></html>
-    """
-    
-    p_html = os.path.join(tempfile.gettempdir(), "espelho_impressao_temp.html")
-    with open(p_html, 'w', encoding='utf-8') as f: f.write(html)
-    webbrowser.open('file://' + os.path.realpath(p_html))
+    _gerar_espelho_html(dados)
 
     # ---------------- B-LOG ----------------
     if not is_pendente:
@@ -302,64 +250,299 @@ def salvar_edicao_precos(dados):
 
 
 def _gerar_espelho_html(dados):
-    """Gera e abre o espelho HTML sem alterar o BLOG."""
-    import html as html_escape_module
-    e = html_escape_module.escape
+    """Gera e abre o espelho HTML executivo de alto padrão."""
+    import html as _hm, tempfile as _tmp, webbrowser as _wb
+    e = _hm.escape
 
-    forn = dados['forn'] or "Sem_Fornecedor"
-    num_pedido_limpo = re.sub(r'[^\w\-]', '', dados['num_pedido'])[:20]
-    is_pendente = dados['status_pagamento'] == "PENDENTES"
+    forn            = dados.get('forn') or "Sem Fornecedor"
+    num_ped_lmp     = re.sub(r'[^\w\-]', '', dados.get('num_pedido', ''))[:20]
+    is_pendente     = dados.get('status_pagamento', '') == "PENDENTES"
 
-    ignorar_html = ["NOTA", "EMISSAO", "CHEGADA", "TIPO FRETE", "VLR TERCEIRO"]
-    colunas_html = "".join([f"<th>{e(str(k))}</th>" for k in dados['itens'][0].keys() if k not in ignorar_html])
-    linhas_html = ""
-    for d in dados['itens']:
-        linhas_html += "<tr>" + "".join([
-            f"<td class='novo-custo'>{e(str(v))}</td>" if k == "NOVO CUSTO"
-            else f"<td class='venda-prazo'>{e(str(v))}</td>" if k in ["VENDA (R$)", "PRAZO (R$)", "MKP REAL"]
-            else f"<td class='prod-nome'>{e(str(v))}</td>" if k == "Produto"
-            else f"<td>{e(str(v))}</td>"
-            for k, v in d.items() if k not in ignorar_html
-        ]) + "</tr>"
+    forn_safe   = e(forn)
+    nota_safe   = e(dados.get('num_nota', ''))
+    frete_safe  = e(dados.get('tipo_frete', ''))
+    pag_safe    = e(dados.get('status_pagamento', ''))
+    pedido_safe = e(num_ped_lmp)
+    regime_safe = e(dados.get('regime', ''))
 
-    forn_safe    = e(forn)
-    pedido_safe  = e(num_pedido_limpo)
-    nota_safe    = e(dados['num_nota'])
-    frete_safe   = e(dados['tipo_frete'])
-    pag_safe     = e(dados['status_pagamento'])
-    resumo_safe  = e(dados['resumo_texto'])
-    texto_pedido = f" | <b>Pedido FDC:</b> <span style='color:#c0392b;'>{pedido_safe}</span>" if pedido_safe else ""
+    # Totais financeiros — vêm do dados ou são extraídos do resumo_texto
+    resumo_txt = dados.get('resumo_texto', '')
+    def _parse(pat):
+        m = re.search(pat, resumo_txt)
+        return converter_moeda_export(m.group(1)) if m else 0.0
+    t_prod  = dados.get('total_mercadoria_compra') or _parse(r'Prod:\s*(R\$\s*[\d\.,]+)')
+    t_ipi   = dados.get('total_ipi_compra')        or _parse(r'IPI:\s*(R\$\s*[\d\.,]+)')
+    t_frete = dados.get('total_frete_compra')       or _parse(r'Frete:\s*(R\$\s*[\d\.,]+)')
+    t_inv   = t_prod + t_ipi + t_frete
+    if t_inv == 0:
+        m = re.search(r'CUSTO TOTAL CARGA:\s*(R\$\s*[\d\.,]+)', resumo_txt)
+        if m: t_inv = converter_moeda_export(m.group(1))
 
-    alerta_pendente_html = ""
+    # Formatadores
+    def _brl(v):
+        s = f"{abs(v):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        return f"R$ {s}" if v >= 0 else f"-R$ {s}"
+    def _pct(v):
+        return f"{v:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.') + "%"
+
+    # KPIs e indicadores
+    ignorar = {"NOTA", "EMISSAO", "CHEGADA", "TIPO FRETE", "VLR TERCEIRO"}
+    itens = dados.get('itens') or []
+    qtd_itens = len(itens)
+    mkp_vals = []; venda_vals = []; retorno_total = 0.0
+
+    for item in itens:
+        vv = converter_moeda_export(item.get('VENDA (R$)', ''))
+        mkp_s = str(item.get('MKP REAL', '0')).replace('%', '').replace(',', '.').strip()
+        qtd_v = converter_moeda_export(item.get('Qtd NF', '') or '0')
+        qtd_b = converter_moeda_export(item.get('Qtd Bon', '') or '0')
+        tot_q = (qtd_v + qtd_b) if (qtd_v + qtd_b) > 0 else qtd_v
+        try: mkp_vals.append(float(mkp_s))
+        except: pass
+        if vv > 0: venda_vals.append(vv)
+        retorno_total += vv * (tot_q if tot_q > 0 else 1)
+
+    mkp_medio   = sum(mkp_vals) / len(mkp_vals) if mkp_vals else 0
+    mkp_maior   = max(mkp_vals) if mkp_vals else 0
+    mkp_menor   = min(mkp_vals) if mkp_vals else 0
+    preco_medio = sum(venda_vals) / len(venda_vals) if venda_vals else 0
+
+    # Cabeçalho da tabela
+    colunas = [k for k in (itens[0].keys() if itens else []) if k not in ignorar]
+    ths = ''.join(
+        f'<th{"" if col != "Produto" else " style=\'text-align:left\'"}'
+        f'>{e(str(col))}</th>'
+        for col in colunas
+    ) + '<th>LUCRO UNIT.</th>'
+
+    # Linhas da tabela
+    rows = ''
+    for idx, item in enumerate(itens):
+        bg    = '#FFFFFF' if idx % 2 == 0 else '#F4F6F7'
+        vv    = converter_moeda_export(item.get('VENDA (R$)', ''))
+        cv    = converter_moeda_export(item.get('NOVO CUSTO', ''))
+        lucro = vv - cv
+        lc    = '#1E8449' if lucro >= 0 else '#E74C3C'
+        rows += f'<tr style="background:{bg}">'
+        for col in colunas:
+            val = e(str(item.get(col, '')))
+            if col == 'Produto':
+                rows += f'<td style="text-align:left;font-weight:500;color:#1A2535;min-width:170px">{val}</td>'
+            elif col == 'Código':
+                rows += f'<td style="text-align:center;color:#5D6D7E;font-size:10px">{val}</td>'
+            elif col == 'NOVO CUSTO':
+                rows += f'<td style="background:#FFF3E0;color:#D35400;font-weight:700">{val}</td>'
+            elif col == 'VENDA (R$)':
+                rows += f'<td style="background:#EAFAF1;color:#1E8449;font-weight:700">{val}</td>'
+            elif col == 'PRAZO (R$)':
+                rows += f'<td style="background:#EBF5FB;color:#1A5276;font-weight:600">{val}</td>'
+            elif col == 'MKP REAL':
+                try:
+                    mn = float(str(item.get(col, '0')).replace('%', '').replace(',', '.').strip())
+                    mc = '#1E8449' if mn >= 30 else '#D35400' if mn < 20 else '#1A5276'
+                except:
+                    mc = '#1A5276'
+                rows += f'<td style="font-weight:700;color:{mc}">{val}</td>'
+            elif col in ('% IPI', '% Frete'):
+                rows += f'<td style="color:#7F8C8D">{val}</td>'
+            else:
+                rows += f'<td>{val}</td>'
+        rows += f'<td style="font-weight:700;color:{lc}">{_brl(lucro)}</td></tr>'
+
+    alerta = ''
     if is_pendente:
-        alerta_pendente_html = "<div style='color:#c0392b;border:2px dashed #c0392b;padding:15px;margin-bottom:20px;font-size:16px;font-weight:bold;text-align:center;background-color:#fadbd8;text-transform:uppercase;'>⚠️ ATENÇÃO: ESTA CARGA ESTÁ PENDENTE DE BOLETOS (AUDITORIA INCOMPLETA) ⚠️</div>"
+        alerta = ('<div style="background:#FADBD8;border-left:6px solid #E74C3C;padding:12px 20px;'
+                  'color:#922B21;font-weight:700;font-size:13px;letter-spacing:.4px">'
+                  '⚠️ ATENÇÃO: CARGA PENDENTE DE BOLETOS — AUDITORIA INCOMPLETA</div>')
+    badge = ('<div style="background:#E74C3C;color:#fff;padding:5px 12px;border-radius:4px;'
+             'font-size:11px;font-weight:700">⚠ PENDENTE</div>') if is_pendente else ''
 
-    html = f"""
-    <html><head><meta charset="utf-8"><title>Espelho de Carga - {forn_safe}</title><style>
-        body{{font-family:'Segoe UI',Arial,sans-serif;padding:20px;color:#333;}}
-        h2{{color:#2C3E50;margin-bottom:5px;}}.info{{font-size:14px;color:#7F8C8D;margin-bottom:20px;}}
-        table{{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px;}}
-        th,td{{border:1px solid #BDC3C7;padding:8px;text-align:center;}}th{{background-color:#34495E;color:white;}}
-        .prod-nome{{text-align:left;}}.novo-custo{{font-weight:bold;color:#D35400;background-color:#FDEBD0;}}
-        .venda-prazo{{font-weight:bold;color:#0E6655;background-color:#E8F8F5;}}
-        .resumo{{margin-top:30px;border:2px solid #2C3E50;padding:15px;background:#ECF0F1;font-size:14px;text-align:center;}}
-        @media print{{.no-print{{display:none!important;}}}}
-    </style></head><body>
-    <h2>ESPELHO DE PRECIFICAÇÃO E VENDAS — EDIÇÃO DE PREÇOS</h2>
-    {alerta_pendente_html}
-    <div class="info">
-        <b>Fornecedor:</b> {forn_safe}{texto_pedido} | <b>Nota Fiscal:</b> {nota_safe} | <b>Regime:</b> {e(dados['regime'])} <br>
-        <b>Tipo de Frete:</b> {frete_safe} | <b>Pagamento:</b> {pag_safe} | <b>Atualizado em:</b> {datetime.now().strftime('%d/%m/%Y às %H:%M')}
-    </div>
-    <table><tr>{colunas_html}</tr>{linhas_html}</table>
-    <div class="resumo"><p><b>DEMONSTRATIVO FINANCEIRO DA COMPRA:</b></p>
-    <p style="font-size:16px;color:#c0392b;"><b>{resumo_safe}</b></p></div>
-    <div class="no-print" style="margin-top:40px;text-align:center;">
-        <button onclick="window.print()" style="padding:15px 30px;font-size:18px;cursor:pointer;background-color:#2980b9;color:white;border:none;border-radius:5px;font-weight:bold;">🖨️ ENVIAR PARA IMPRESSORA</button>
-    </div></body></html>"""
+    # CSS separado (sem f-string para não escapar {})
+    css = (
+        "*{box-sizing:border-box;margin:0;padding:0}"
+        "body{font-family:'Segoe UI',Arial,sans-serif;background:#EDF0F5;color:#1A2535;font-size:12px}"
+        ".page{max-width:1600px;margin:0 auto}"
+        ".hdr{background:linear-gradient(135deg,#1A2535,#2C3E50);padding:16px 24px;display:flex;"
+              "align-items:center;justify-content:space-between}"
+        ".hdr-t{color:#F1C40F;font-size:17px;font-weight:700;letter-spacing:.5px}"
+        ".hdr-s{color:#AEB6BF;font-size:11px;margin-top:3px}"
+        ".ibar{background:#1A2535;display:flex;gap:1px}"
+        ".ic{flex:1;padding:10px 14px;background:#223048}"
+        ".ic-l{color:#7F8C8D;font-size:9px;font-weight:700;text-transform:uppercase;"
+              "letter-spacing:.8px;margin-bottom:3px}"
+        ".ic-v{color:#EAECEE;font-size:12px;font-weight:600;white-space:nowrap;"
+              "overflow:hidden;text-overflow:ellipsis}"
+        ".ic-v.hl{color:#F1C40F}"
+        ".kbar{display:flex;gap:12px;padding:14px 20px;background:#EDF0F5}"
+        ".kc{flex:1;background:#fff;border-radius:8px;padding:14px 16px;"
+             "border-top:4px solid #2980B9;box-shadow:0 2px 8px rgba(0,0,0,.07)}"
+        ".kc-i{font-size:18px;margin-bottom:4px}"
+        ".kc-l{color:#7F8C8D;font-size:9px;font-weight:700;text-transform:uppercase;"
+              "letter-spacing:.8px;margin-bottom:4px}"
+        ".kc-v{color:#1A2535;font-size:15px;font-weight:700}"
+        ".kc-inv{border-top-color:#1A5276;background:linear-gradient(135deg,#1B2E4A,#2471A3)}"
+        ".kc-inv .kc-l{color:#AED6F1}"
+        ".kc-inv .kc-v{color:#F1C40F;font-size:18px}"
+        ".kc-inv .kc-sub{color:#AED6F1;font-size:9px;margin-top:3px}"
+        ".twrap{padding:0 20px 12px;background:#fff;margin-bottom:4px}"
+        ".stit{padding:14px 0 8px;font-size:11px;font-weight:700;color:#2C3E50;"
+               "text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid #2C3E50;margin-bottom:6px}"
+        "table{width:100%;border-collapse:collapse;font-size:11px}"
+        "thead tr{background:#1A2535}"
+        "thead th{color:#fff;padding:9px 7px;text-align:right;font-size:10px;font-weight:700;"
+                 "text-transform:uppercase;letter-spacing:.3px;white-space:nowrap;"
+                 "border-right:1px solid #2C3E50}"
+        "thead th:first-child{text-align:center}"
+        "tbody td{padding:7px 7px;border-bottom:1px solid #ECF0F1;text-align:right;"
+                  "vertical-align:middle;border-right:1px solid #ECF0F1}"
+        "tbody tr:hover{background:#EBF5FB!important}"
+        ".foot{background:linear-gradient(135deg,#1A2535,#2C3E50);margin:0 20px;"
+               "border-radius:0 0 8px 8px;padding:14px 20px;display:flex;align-items:center;gap:14px}"
+        ".fi{text-align:center;flex:1}"
+        ".fi-l{color:#95A5A6;font-size:9px;text-transform:uppercase;letter-spacing:.8px;font-weight:600}"
+        ".fi-v{color:#EAECEE;font-size:13px;font-weight:700;margin-top:2px}"
+        ".fi-sep{color:#5D6D7E;font-size:22px;font-weight:300;padding:0 4px}"
+        ".fi-tot{flex:2;background:rgba(255,255,255,.08);border-radius:6px;padding:10px 16px;"
+                "border:1px solid rgba(241,196,15,.4)}"
+        ".fi-tot .fi-l{color:#F1C40F}"
+        ".fi-tot .fi-v{color:#F1C40F;font-size:18px}"
+        ".ibar2{display:flex;gap:12px;padding:12px 20px 20px;background:#EDF0F5}"
+        ".ind{flex:1;background:#fff;border-radius:8px;padding:12px 14px;"
+              "border-left:4px solid #2471A3;box-shadow:0 2px 6px rgba(0,0,0,.06)}"
+        ".ind-l{color:#7F8C8D;font-size:9px;font-weight:700;text-transform:uppercase;"
+               "letter-spacing:.8px;margin-bottom:4px}"
+        ".ind-v{font-size:15px;font-weight:700;color:#1A2535}"
+        ".ind-dst{border-left-color:#F1C40F}"
+        ".ind-dst .ind-v{color:#D68910}"
+        ".nopr{text-align:center;padding:20px;background:#EDF0F5}"
+        ".bpr{padding:11px 28px;font-size:14px;cursor:pointer;background:#2471A3;color:#fff;"
+              "border:none;border-radius:6px;font-weight:700;box-shadow:0 3px 8px rgba(0,0,0,.15);"
+              "letter-spacing:.3px}"
+        ".bpr:hover{background:#1A5276}"
+        "@page{margin:12mm}"
+        "@media print{"
+          "body{background:#fff}"
+          ".nopr{display:none!important}"
+          ".kbar,.ibar2{background:#fff}"
+          ".hdr,.ibar,.kc-inv,.foot{-webkit-print-color-adjust:exact;print-color-adjust:exact}"
+          "thead tr{-webkit-print-color-adjust:exact;print-color-adjust:exact}"
+          "tbody td{-webkit-print-color-adjust:exact;print-color-adjust:exact}"
+        "}"
+    )
 
-    import tempfile, webbrowser
-    p_html = os.path.join(tempfile.gettempdir(), "espelho_impressao_temp.html")
+    html = f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Espelho — {forn_safe}</title>
+<style>{css}</style>
+</head>
+<body>
+<div class="page">
+
+<div class="hdr">
+  <div>
+    <div class="hdr-t">ESPELHO DE PRECIFICAÇÃO E VENDAS</div>
+    <div class="hdr-s">BRUNO ELETROMÓVEIS &nbsp;·&nbsp; EDIÇÃO DE PREÇOS</div>
+  </div>
+  {badge}
+</div>
+
+{alerta}
+
+<div class="ibar">
+  <div class="ic"><div class="ic-l">Fornecedor</div><div class="ic-v hl">{forn_safe}</div></div>
+  <div class="ic"><div class="ic-l">Pedido FDC</div><div class="ic-v">{pedido_safe or '—'}</div></div>
+  <div class="ic"><div class="ic-l">Nota Fiscal</div><div class="ic-v">{nota_safe or '—'}</div></div>
+  <div class="ic"><div class="ic-l">Regime</div><div class="ic-v">{regime_safe}</div></div>
+  <div class="ic"><div class="ic-l">Tipo de Frete</div><div class="ic-v">{frete_safe}</div></div>
+  <div class="ic"><div class="ic-l">Pagamento</div><div class="ic-v">{pag_safe}</div></div>
+  <div class="ic"><div class="ic-l">Atualizado em</div><div class="ic-v">{datetime.now().strftime('%d/%m/%Y, %H:%M')}</div></div>
+</div>
+
+<div class="kbar">
+  <div class="kc">
+    <div class="kc-i">\U0001f4e6</div>
+    <div class="kc-l">Qtd. de Itens</div>
+    <div class="kc-v">{qtd_itens} PRODUTOS</div>
+  </div>
+  <div class="kc kc-inv">
+    <div class="kc-i" style="color:#AED6F1">\U0001f4b0</div>
+    <div class="kc-l">Investimento Total</div>
+    <div class="kc-v">{_brl(t_inv)}</div>
+    <div class="kc-sub">CUSTO TOTAL DA CARGA</div>
+  </div>
+  <div class="kc">
+    <div class="kc-i">\U0001f4cb</div>
+    <div class="kc-l">IPI Total</div>
+    <div class="kc-v">{_brl(t_ipi)}</div>
+  </div>
+  <div class="kc">
+    <div class="kc-i">\U0001f69a</div>
+    <div class="kc-l">Frete Total</div>
+    <div class="kc-v">{_brl(t_frete)}</div>
+  </div>
+  <div class="kc">
+    <div class="kc-i">\U0001f4c8</div>
+    <div class="kc-l">Retorno Potencial</div>
+    <div class="kc-v">{_brl(retorno_total)}</div>
+  </div>
+</div>
+
+<div class="twrap">
+  <div class="stit">▸ DETALHAMENTO DOS PRODUTOS</div>
+  <table>
+    <thead><tr>{ths}</tr></thead>
+    <tbody>{rows}</tbody>
+  </table>
+</div>
+
+<div class="foot">
+  <div class="fi"><div class="fi-l">\U0001f4e6 Produtos</div><div class="fi-v">{_brl(t_prod)}</div></div>
+  <div class="fi-sep">+</div>
+  <div class="fi"><div class="fi-l">\U0001f4cb IPI</div><div class="fi-v">{_brl(t_ipi)}</div></div>
+  <div class="fi-sep">+</div>
+  <div class="fi"><div class="fi-l">\U0001f69a Frete</div><div class="fi-v">{_brl(t_frete)}</div></div>
+  <div class="fi-sep">=</div>
+  <div class="fi fi-tot">
+    <div class="fi-l">INVESTIMENTO TOTAL DA CARGA</div>
+    <div class="fi-v">{_brl(t_inv)}</div>
+  </div>
+</div>
+
+<div class="ibar2">
+  <div class="ind">
+    <div class="ind-l">Markup Médio</div>
+    <div class="ind-v">{_pct(mkp_medio)}</div>
+  </div>
+  <div class="ind">
+    <div class="ind-l">Preço Médio de Venda</div>
+    <div class="ind-v">{_brl(preco_medio)}</div>
+  </div>
+  <div class="ind">
+    <div class="ind-l">Maior Markup</div>
+    <div class="ind-v" style="color:#1E8449">{_pct(mkp_maior)}</div>
+  </div>
+  <div class="ind">
+    <div class="ind-l">Menor Markup</div>
+    <div class="ind-v" style="color:#D35400">{_pct(mkp_menor)}</div>
+  </div>
+  <div class="ind ind-dst">
+    <div class="ind-l">Investimento Total</div>
+    <div class="ind-v">{_brl(t_inv)}</div>
+  </div>
+</div>
+
+<div class="nopr">
+  <button onclick="window.print()" class="bpr">\U0001f5a8️ ENVIAR PARA IMPRESSORA</button>
+</div>
+
+</div>
+</body>
+</html>"""
+
+    p_html = os.path.join(_tmp.gettempdir(), "espelho_impressao_temp.html")
     with open(p_html, 'w', encoding='utf-8') as f:
         f.write(html)
-    webbrowser.open('file://' + os.path.realpath(p_html))
+    _wb.open('file://' + os.path.realpath(p_html))
