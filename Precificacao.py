@@ -2550,7 +2550,7 @@ def criar_tela():
             sub.option_add("*Foreground", WHITE)
             try: sub.iconbitmap(_get_recurso("icone.ico"))
             except: pass
-            sub.geometry(f"430x310+{dial.winfo_rootx()+(dial.winfo_width()-430)//2}+{dial.winfo_rooty()+(dial.winfo_height()-310)//2}")
+            sub.geometry(f"430x370+{dial.winfo_rootx()+(dial.winfo_width()-430)//2}+{dial.winfo_rooty()+(dial.winfo_height()-370)//2}")
             tk.Frame(sub, bg=GOLD, height=4).pack(fill="x")
             f_st = tk.Frame(sub, bg=BG); f_st.pack(fill="x")
             tk.Label(f_st, text="EDITAR DESTINATÁRIOS", bg=BG, fg=GOLD,
@@ -2582,8 +2582,8 @@ def criar_tela():
                                relief="flat", bd=0, highlightthickness=0, cursor="hand2",
                                activebackground="#555555", activeforeground="white",
                                command=sub.destroy)
-            _b_ok2.place(x=24, y=295, width=130, height=38)
-            _b_ca2.place(x=430 - 24 - 110, y=295, width=110, height=38)
+            _b_ok2.place(x=24, y=318, width=130, height=38)
+            _b_ca2.place(x=430 - 24 - 110, y=318, width=110, height=38)
 
         f_alt = tk.Frame(dial, bg=BG)
         f_alt.pack(fill="x", padx=36, pady=(10, 2))
