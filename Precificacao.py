@@ -1274,7 +1274,7 @@ def criar_tela():
             scrollbar.pack(side=RIGHT, fill=Y)
             listbox.pack(side=LEFT, fill=BOTH, expand=True)
 
-            for r in resultados.itertuples(index=False): listbox.insert(END, f"{r._cod_str} - {r._nome_str}")
+            for _, r in resultados.iterrows(): listbox.insert(END, f"{r['_cod_str']} - {r['_nome_str']}")
 
             def select_item(event=None):
                 if not listbox or not listbox.winfo_exists() or not listbox.curselection():
