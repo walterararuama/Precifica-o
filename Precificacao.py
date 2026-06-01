@@ -1229,7 +1229,10 @@ def criar_tela():
             nonlocal listbox_window
             entry_widget.lista_aberta = False
             if listbox_window:
-                listbox_window.destroy()
+                try:
+                    listbox_window.destroy()
+                except Exception:
+                    pass
                 listbox_window = None
 
         def check_global_click(e):
@@ -1274,7 +1277,8 @@ def criar_tela():
             scrollbar.pack(side=RIGHT, fill=Y)
             listbox.pack(side=LEFT, fill=BOTH, expand=True)
 
-            for _, r in resultados.iterrows(): listbox.insert(END, f"{r['_cod_str']} - {r['_nome_str']}")
+            for cod, nome in zip(resultados['_cod_str'].tolist(), resultados['_nome_str'].tolist()):
+                listbox.insert(END, f"{cod} - {nome}")
 
             def select_item(event=None):
                 if not listbox or not listbox.winfo_exists() or not listbox.curselection():
@@ -1317,6 +1321,8 @@ def criar_tela():
                     listbox.selection_set(0)
                     select_item()
                     return "break"
+                # Listbox aberta mas vazia — fecha e deixa tentar_avancar continuar
+                close_listbox()
 
             entry_widget.force_select_first = on_entry_return
             entry_widget.bind('<Down>', handle_keys)
@@ -1440,14 +1446,16 @@ def criar_tela():
         def tentar_avancar(e, d):
             if getattr(d['e_cod'], 'lista_aberta', False):
                 if hasattr(d['e_cod'], 'force_select_first'):
-                    d['e_cod'].force_select_first(e)
-                return "break"
-                
-            if buscar_produto(d): 
+                    if d['e_cod'].force_select_first(e) == "break":
+                        return "break"
+                # Listbox vazia ou sem handler — cai no buscar_produto abaixo
+
+            if buscar_produto(d):
                 root.after(50, lambda: focus_qtd(d['e_qtd_nf']))
-            else: 
-                root.after(50, lambda: focus_qtd(d['e_cod']))
-                mostrar_balao_aviso(d['e_cod'], "Produto não encontrado")
+            else:
+                root.after(50, lambda: focus_qtd(d['e_qtd_nf']))
+                if d['var_cod'].get().strip():
+                    mostrar_balao_aviso(d['e_cod'], "Produto não encontrado")
             return "break"
                 
         rd['e_cod'].bind("<Return>", lambda e, d=rd: tentar_avancar(e, d))
