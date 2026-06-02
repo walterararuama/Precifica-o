@@ -384,7 +384,7 @@ def criar_tela():
     linhas_nota = []
     indice_linha_atual = 2 
     lista_fornecedores = get_lista_nomes_fornecedores(DB_PATH)
-    var_regime = tk.StringVar(value="MISTA (NF + Romaneio)") 
+    var_regime = tk.StringVar(value="ROMANEIO BASE") 
     var_pedido = tk.StringVar()
     root.arquivo_aberto_atual = None 
 
@@ -742,7 +742,7 @@ def criar_tela():
 
     f_regime = ttkb.Frame(f_header, bootstyle="primary"); f_regime.pack(side="left", padx=15)
     ttkb.Label(f_regime, text="REGIME:", font=("Segoe UI", 10, "bold"), bootstyle="inverse-primary").pack(side="left", padx=5)
-    combo_regime = ttk.Combobox(f_regime, textvariable=var_regime, values=["MISTA (NF + Romaneio)", "100% NOTA FISCAL", "NOTA + BONIFICAÇÃO"], width=22, font=("Segoe UI", 10, "bold"), state="readonly")
+    combo_regime = ttk.Combobox(f_regime, textvariable=var_regime, values=["ROMANEIO BASE", "NF BASE + ROMANEIO", "100% NOTA FISCAL", "NOTA + BONIFICAÇÃO"], width=22, font=("Segoe UI", 10, "bold"), state="readonly")
     combo_regime.pack(side="left")
     
     def alternar_tema():
@@ -1097,10 +1097,7 @@ def criar_tela():
         r = indice_linha_atual
         lbl_foot_txt.grid(row=r, column=2, sticky="nsew", padx=1, pady=10); foot_qtd_nf.grid(row=r, column=3, sticky="nsew", padx=1, pady=10); foot_val_nf.grid(row=r, column=4, sticky="nsew", padx=1, pady=10); foot_vazio1.grid(row=r, column=5, sticky="nsew", padx=1, pady=10); foot_vazio2.grid(row=r, column=8, sticky="nsew", padx=1, pady=10); foot_estoque.grid(row=r, column=9, sticky="nsew", padx=1, pady=10)
         regime = var_regime.get()
-        if regime == "MISTA (NF + Romaneio)":
-            foot_qtd_rom.grid(row=r, column=6, sticky="nsew", padx=1, pady=10)
-            foot_val_rom.grid(row=r, column=7, sticky="nsew", padx=1, pady=10)
-        elif regime == "NOTA + BONIFICAÇÃO":
+        if regime in ("ROMANEIO BASE", "NF BASE + ROMANEIO", "NOTA + BONIFICAÇÃO"):
             foot_qtd_rom.grid(row=r, column=6, sticky="nsew", padx=1, pady=10)
             foot_val_rom.grid(row=r, column=7, sticky="nsew", padx=1, pady=10)
         else:
@@ -1129,9 +1126,13 @@ def criar_tela():
                     q_bon = converter_moeda(r['var_qtd_rom'].get())
                     q_fisica = q_nf + q_bon
                     val_mercadoria_bruto = q_nf * u_nf
-                else:  # MISTA
+                elif regime == "ROMANEIO BASE":
                     q_fisica = converter_moeda(r['var_qtd_rom'].get())
                     val_mercadoria_bruto = q_fisica * converter_moeda(r['var_unit_rom'].get())
+                else:  # NF BASE + ROMANEIO
+                    q_rom = converter_moeda(r['var_qtd_rom'].get())
+                    q_fisica = q_nf + q_rom
+                    val_mercadoria_bruto = q_nf * u_nf
 
                 if q_nf > 0 and q_fisica > 0:
                     val_nf_base = u_nf * q_nf
@@ -1183,7 +1184,7 @@ def criar_tela():
             except Exception as ex: r['var_novo_custo'].set("ERRO")
 
         var_tot_qtd_nf.set(f"{t_qtd_nf:g}"); var_tot_val_nf.set(formatar_moeda(t_val_nf_total)); var_tot_qtd_rom.set(f"{t_qtd_rom:g}"); var_tot_val_rom.set(formatar_moeda(t_val_rom_total)); var_tot_estoque.set(f"{t_estoque:g}")
-        t_base = t_val_rom_total if regime == "MISTA (NF + Romaneio)" else t_val_nf_total
+        t_base = t_val_rom_total if regime == "ROMANEIO BASE" else t_val_nf_total
         lbl_res_formula.config(text=f"Itens: {sucessos}  | Prod: {formatar_moeda(t_base)}  +  IPI: {formatar_moeda(t_ipi_total)}  =  {formatar_moeda(t_base+t_ipi_total)}  +  Frete: {formatar_moeda(t_frete_total)}  =  CUSTO TOTAL CARGA: {formatar_moeda(t_custo_carga)}")
         root.total_mercadoria_compra, root.total_frete_compra, root.total_ipi_compra = t_base, t_frete_total, t_ipi_total
 
@@ -1192,7 +1193,13 @@ def criar_tela():
         if regime == "100% NOTA FISCAL":
             for lbl in labels_cabecalho_romaneio: lbl.grid_remove()
             for r in linhas_nota: r['e_qtd_rom'].grid_remove(); r['e_unit_rom'].grid_remove()
-        elif regime == "MISTA (NF + Romaneio)":
+        elif regime == "ROMANEIO BASE":
+            if lbl_grupo_rom:    lbl_grupo_rom.config(text="📋 ROMANEIO")
+            if lbl_sub_qtd_rom:  lbl_sub_qtd_rom.config(text="Qtd Rom")
+            if lbl_sub_val_rom:  lbl_sub_val_rom.config(text="R$ Rom"); lbl_sub_val_rom.grid()
+            for lbl in labels_cabecalho_romaneio: lbl.grid()
+            for r in linhas_nota: r['e_qtd_rom'].grid(); r['e_unit_rom'].grid()
+        elif regime == "NF BASE + ROMANEIO":
             if lbl_grupo_rom:    lbl_grupo_rom.config(text="📋 ROMANEIO")
             if lbl_sub_qtd_rom:  lbl_sub_qtd_rom.config(text="Qtd Rom")
             if lbl_sub_val_rom:  lbl_sub_val_rom.config(text="R$ Rom"); lbl_sub_val_rom.grid()
@@ -1514,7 +1521,7 @@ def criar_tela():
         for rd in list(linhas_nota): remover_linha(rd)
         combo_forn.set("")
         var_pedido.set("")
-        var_regime.set("MISTA (NF + Romaneio)")
+        var_regime.set("ROMANEIO BASE")
         alternar_regime()
         var_num_nota.set(""); var_dt_emissao.set(""); var_dt_chegada.set(""); var_tipo_frete.set(""); var_val_terceirizado.set("R$ 0,00"); var_markup_geral.set("0,00%")
         ent_val_terceiro.config(state="disabled")
@@ -1549,8 +1556,11 @@ def criar_tela():
                     var_tipo_frete.set(tipo_f)
                     ao_selecionar_frete(force=True)
 
-            if "Qtd Bon" in df.columns: var_regime.set("NOTA + BONIFICAÇÃO")
-            elif "Qtd Rom" in df.columns: var_regime.set("MISTA (NF + Romaneio)")
+            if "REGIME" in df.columns:
+                r_val = clean_str(df["REGIME"].iloc[0])
+                if r_val: var_regime.set(r_val)
+            elif "Qtd Bon" in df.columns: var_regime.set("NOTA + BONIFICAÇÃO")
+            elif "Qtd Rom" in df.columns: var_regime.set("ROMANEIO BASE")
             else: var_regime.set("100% NOTA FISCAL")
             alternar_regime()
 
@@ -1569,7 +1579,7 @@ def criar_tela():
                 linha_atual['var_cod'].set(str(row.get("Código", ""))); buscar_produto(linha_atual) 
                 linha_atual['var_qtd_nf'].set(str(row.get("Qtd NF", ""))); linha_atual['var_unit_nf'].set(str(row.get("Unit. NF", "")))
                 linha_atual['var_ipi'].set(str(row.get("% IPI", ""))); linha_atual['var_frete'].set(str(row.get("% Frete", "")))
-                if var_regime.get() == "MISTA (NF + Romaneio)":
+                if var_regime.get() in ("ROMANEIO BASE", "NF BASE + ROMANEIO"):
                     linha_atual['var_qtd_rom'].set(str(row.get("Qtd Rom", ""))); linha_atual['var_unit_rom'].set(str(row.get("Unit. Rom", "")))
                 elif var_regime.get() == "NOTA + BONIFICAÇÃO":
                     linha_atual['var_qtd_rom'].set(str(row.get("Qtd Bon", "")))
@@ -1800,8 +1810,8 @@ def criar_tela():
         for r in linhas_nota:
             if r["var_cod"].get().strip() and r["var_nome"].get() not in ["---","❌ PRODUTO NÃO ENCONTRADO"]:
                 q_nf=r["var_qtd_nf"].get(); q_bon=r["var_qtd_rom"].get()
-                if regime_av=="MISTA (NF + Romaneio)": qtd=q_bon
-                elif regime_av=="NOTA + BONIFICAÇÃO":
+                if regime_av=="ROMANEIO BASE": qtd=q_bon
+                elif regime_av in ("NF BASE + ROMANEIO", "NOTA + BONIFICAÇÃO"):
                     try: tot=int(float(q_nf or 0)+float(q_bon or 0))
                     except: tot="?"
                     qtd=str(tot)
@@ -2141,7 +2151,8 @@ def criar_tela():
                             "Unit. NF": r['var_unit_nf'].get(), 
                             "% IPI": r['var_ipi'].get()
                         }
-                        if var_regime.get() == "MISTA (NF + Romaneio)":
+                        linha_dict["REGIME"] = var_regime.get()
+                        if var_regime.get() in ("ROMANEIO BASE", "NF BASE + ROMANEIO"):
                             linha_dict.update({"Qtd Rom": r['var_qtd_rom'].get(), "Unit. Rom": r['var_unit_rom'].get()})
                         elif var_regime.get() == "NOTA + BONIFICAÇÃO":
                             linha_dict.update({"Qtd Bon": r['var_qtd_rom'].get(), "R$ Bon": r['var_unit_rom'].get()})
@@ -2257,7 +2268,8 @@ def criar_tela():
                     "Unit. NF": r['var_unit_nf'].get(),
                     "% IPI": r['var_ipi'].get()
                 }
-                if var_regime.get() == "MISTA (NF + Romaneio)":
+                linha_dict["REGIME"] = var_regime.get()
+                if var_regime.get() in ("ROMANEIO BASE", "NF BASE + ROMANEIO"):
                     linha_dict.update({"Qtd Rom": r['var_qtd_rom'].get(), "Unit. Rom": r['var_unit_rom'].get()})
                 elif var_regime.get() == "NOTA + BONIFICAÇÃO":
                     linha_dict.update({"Qtd Bon": r['var_qtd_rom'].get(), "R$ Bon": r['var_unit_rom'].get()})
